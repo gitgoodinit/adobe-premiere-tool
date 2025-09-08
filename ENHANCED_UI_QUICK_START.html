@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced UI Integration - Quick Start</title>
+
+    <!-- Include Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+    <!-- Include the enhanced UI CSS -->
+    <link rel="stylesheet" href="./src/ui/enhanced-silence-results.css">
+
+    <style>
+        /* Quick integration styles */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f1419;
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .integration-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .integration-header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .integration-header h1 {
+            color: #00bcd4;
+            margin-bottom: 10px;
+        }
+
+        .integration-header p {
+            color: #a0aec0;
+            font-size: 18px;
+        }
+
+        .integration-steps {
+            background: #1a1a1a;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+
+        .integration-steps h2 {
+            color: #00bcd4;
+            margin-bottom: 20px;
+        }
+
+        .step {
+            background: #2d3748;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-left: 4px solid #00bcd4;
+        }
+
+        .step h3 {
+            color: #ffffff;
+            margin-bottom: 10px;
+        }
+
+        .step p {
+            color: #a0aec0;
+            margin-bottom: 15px;
+        }
+
+        .code-block {
+            background: #1a202c;
+            border: 1px solid #4a5568;
+            border-radius: 6px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            color: #e2e8f0;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+
+        .demo-section {
+            background: #1a1a1a;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+
+        .demo-section h2 {
+            color: #00bcd4;
+            margin-bottom: 20px;
+        }
+
+        .demo-buttons {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin-bottom: 30px;
+        }
+
+        .demo-btn {
+            background: rgba(0, 188, 212, 0.2);
+            border: 2px solid #00bcd4;
+            color: #00bcd4;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .demo-btn:hover {
+            background: #00bcd4;
+            color: #1a1a1a;
+            transform: translateY(-2px);
+        }
+
+        .demo-btn.secondary {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.3);
+            color: #ffffff;
+        }
+
+        .demo-btn.secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
+            color: #ffffff;
+        }
+
+        .enhanced-ui-container {
+            margin-top: 30px;
+        }
+
+        .note {
+            background: rgba(255, 193, 7, 0.1);
+            border: 1px solid rgba(255, 193, 7, 0.3);
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .note h4 {
+            color: #ffc107;
+            margin-bottom: 10px;
+        }
+
+        .note p {
+            color: #ffd54f;
+            margin: 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="integration-container">
+        <div class="integration-header">
+            <h1>🎨 Enhanced Silence Results UI</h1>
+            <p>Dark Theme Dashboard Integration</p>
+        </div>
+
+        <div class="integration-steps">
+            <h2>🚀 Quick Integration Steps</h2>
+
+            <div class="step">
+                <h3>Step 1: Add Enhanced Features to Your Main App</h3>
+                <p>In your main <code>index.js</code>, add this after your existing AudioToolsPro initialization:</p>
+                <div class="code-block">
+                    // Import enhanced features and UI
+                    const EnhancedFeatureManager = require('./src/core/EnhancedFeatureManager');
+                    const EnhancedSilenceResultsIntegration = require('./src/ui/EnhancedSilenceResultsIntegration');
+
+                    // In your AudioToolsPro constructor or initialization
+                    constructor() {
+                    // ... existing code ...
+
+                    // Initialize enhanced features
+                    this.enhancedFeatures = new EnhancedFeatureManager(this);
+
+                    // Initialize enhanced UI integration
+                    this.enhancedUI = new EnhancedSilenceResultsIntegration(this);
+
+                    // ... existing code ...
+                    }
+                </div>
+            </div>
+
+            <div class="step">
+                <h3>Step 2: Include the CSS Styles</h3>
+                <p>Add this to your main HTML file (<code>index.html</code>) in the <code>&lt;head&gt;</code> section:
+                </p>
+                <div class="code-block">
+                    &lt;link rel="stylesheet" href="./src/ui/enhanced-silence-results.css"&gt;
+                </div>
+            </div>
+
+            <div class="step">
+                <h3>Step 3: That's It! 🎉</h3>
+                <p>The enhanced UI will automatically:</p>
+                <ul style="color: #a0aec0; margin-left: 20px;">
+                    <li>✅ Replace your existing silence detection button with "Enhanced AI Silence Detection"</li>
+                    <li>✅ Add a floating toggle button to show/hide the enhanced results</li>
+                    <li>✅ Integrate with your existing audio player and controls</li>
+                    <li>✅ Provide fallback to basic detection if enhanced features aren't available</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="demo-section">
+            <h2>🎯 Demo the Enhanced UI</h2>
+            <p>Test the enhanced UI components below:</p>
+
+            <div class="demo-buttons">
+                <button class="demo-btn" onclick="showEnhancedUI()">
+                    <i class="fas fa-eye"></i> Show Enhanced UI
+                </button>
+                <button class="demo-btn secondary" onclick="hideEnhancedUI()">
+                    <i class="fas fa-eye-slash"></i> Hide Enhanced UI
+                </button>
+                <button class="demo-btn" onclick="runDemoDetection()">
+                    <i class="fas fa-play"></i> Run Demo Detection
+                </button>
+                <button class="demo-btn secondary" onclick="resetDemo()">
+                    <i class="fas fa-undo"></i> Reset Demo
+                </button>
+            </div>
+
+            <div class="enhanced-ui-container" id="enhancedSilenceResultsContainer" style="display: none;">
+                <!-- Enhanced UI will be loaded here -->
+            </div>
+        </div>
+
+        <div class="note">
+            <h4>📝 Important Notes</h4>
+            <p><strong>File Structure:</strong> Make sure all the enhanced UI files are in the correct locations:<br>
+                <code>src/ui/EnhancedSilenceResultsUI.js</code>, <code>src/ui/enhanced-silence-results.css</code>, etc.
+            </p>
+        </div>
+
+        <div class="note">
+            <h4>🔧 Troubleshooting</h4>
+            <p>If the enhanced UI doesn't show up, check the browser console for errors and ensure all required files
+                are properly loaded.</p>
+        </div>
+    </div>
+
+    <!-- Demo JavaScript -->
+    <script>
+        let enhancedUI = null;
+        let demoResults = [];
+
+        // Initialize demo
+        document.addEventListener('DOMContentLoaded', function () {
+            console.log('Enhanced UI Demo initialized');
+        });
+
+        function showEnhancedUI() {
+            const container = document.getElementById('enhancedSilenceResultsContainer');
+            if (container) {
+                container.style.display = 'block';
+                console.log('Enhanced UI shown');
+            }
+        }
+
+        function hideEnhancedUI() {
+            const container = document.getElementById('enhancedSilenceResultsContainer');
+            if (container) {
+                container.style.display = 'none';
+                console.log('Enhanced UI hidden');
+            }
+        }
+
+        function runDemoDetection() {
+            // Generate demo results
+            demoResults = [
+                {
+                    start: 0,
+                    end: 2.5,
+                    duration: 2.5,
+                    consensusConfidence: 0.95,
+                    method: 'whisper',
+                    type: 'speech_gap',
+                    detectionMethods: ['whisper', 'ffmpeg'],
+                    qualityScore: 92,
+                    recommendedAction: 'auto_trim',
+                    confidenceLevel: 'very_high',
+                    visualizationColor: '#4CAF50'
+                },
+                {
+                    start: 7.2,
+                    end: 8.1,
+                    duration: 0.9,
+                    consensusConfidence: 0.88,
+                    method: 'whisper',
+                    type: 'speech_gap',
+                    detectionMethods: ['whisper', 'webAudio'],
+                    qualityScore: 85,
+                    recommendedAction: 'auto_trim',
+                    confidenceLevel: 'high',
+                    visualizationColor: '#8BC34A'
+                }
+            ];
+
+            // Show enhanced UI
+            showEnhancedUI();
+
+            // Create demo UI
+            createDemoUI();
+
+            console.log('Demo detection completed with', demoResults.length, 'segments');
+        }
+
+        function createDemoUI() {
+            const container = document.getElementById('enhancedSilenceResultsContainer');
+            if (!container) return;
+
+            // Create demo UI HTML
+            container.innerHTML = `
+                <div class="enhanced-silence-results">
+                    <!-- Header with Summary -->
+                    <div class="results-header">
+                        <div class="header-left">
+                            <h3><i class="fas fa-volume-mute"></i> Silence Detection Results</h3>
+                            <p class="subtitle">AI-powered analysis of your audio content</p>
+                            <div class="results-summary">
+                                <div class="summary-card">
+                                    <div class="summary-icon">
+                                        <i class="fas fa-chart-bar"></i>
+                                    </div>
+                                    <div class="summary-content">
+                                        <div class="summary-value">2</div>
+                                        <div class="summary-label">Segments</div>
+                                    </div>
+                                </div>
+                                <div class="summary-card">
+                                    <div class="summary-icon silence-icon">
+                                        <i class="fas fa-volume-mute"></i>
+                                    </div>
+                                    <div class="summary-content">
+                                        <div class="summary-value">0:28</div>
+                                        <div class="summary-label">Silence</div>
+                                    </div>
+                                </div>
+                                <div class="summary-card">
+                                    <div class="summary-icon audio-icon">
+                                        <i class="fas fa-chart-line"></i>
+                                    </div>
+                                    <div class="summary-content">
+                                        <div class="summary-value">28.0%</div>
+                                        <div class="summary-label">Of Audio</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Analysis Methods Section -->
+                    <div class="analysis-methods-section">
+                        <div class="section-header">
+                            <h4><i class="fas fa-cog"></i> Analysis Methods Used</h4>
+                        </div>
+                        <div class="methods-list">
+                            <div class="method-item">
+                                <div class="method-icon">
+                                    <i class="fas fa-microphone"></i>
+                                </div>
+                                <div class="method-name">WHISPER AI</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Timeline Visualization -->
+                    <div class="timeline-section">
+                        <div class="timeline-header">
+                            <h4><i class="fas fa-chart-line"></i> Audio Timeline & AI Analysis</h4>
+                            <div class="timeline-stats">
+                                <div class="stat-item">
+                                    <span class="stat-label">Total:</span>
+                                    <span class="stat-value">0:10</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Segments:</span>
+                                    <span class="stat-value">2</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="analysis-cards">
+                            <div class="analysis-card">
+                                <div class="card-icon">
+                                    <i class="fas fa-robot"></i>
+                                </div>
+                                <div class="card-content">
+                                    <div class="card-value">91.5%</div>
+                                    <div class="card-label">AI Confidence</div>
+                                </div>
+                            </div>
+                            <div class="analysis-card">
+                                <div class="card-icon">
+                                    <i class="fas fa-crosshairs"></i>
+                                </div>
+                                <div class="card-content">
+                                    <div class="card-value">Whisper AI</div>
+                                    <div class="card-label">Detection Method</div>
+                                </div>
+                            </div>
+                            <div class="analysis-card">
+                                <div class="card-icon">
+                                    <i class="fas fa-bolt"></i>
+                                </div>
+                                <div class="card-content">
+                                    <div class="card-value">245ms</div>
+                                    <div class="card-label">Processing Time</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="timeline-container">
+                            <div class="timeline-ruler">
+                                <div class="ruler-marker" style="left: 0%">
+                                    <span class="ruler-label">0:00</span>
+                                </div>
+                                <div class="ruler-marker" style="left: 20%">
+                                    <span class="ruler-label">0:02</span>
+                                </div>
+                                <div class="ruler-marker" style="left: 40%">
+                                    <span class="ruler-label">0:04</span>
+                                </div>
+                                <div class="ruler-marker" style="left: 60%">
+                                    <span class="ruler-label">0:06</span>
+                                </div>
+                                <div class="ruler-marker" style="left: 80%">
+                                    <span class="ruler-label">0:08</span>
+                                </div>
+                                <div class="ruler-marker" style="left: 100%">
+                                    <span class="ruler-label">0:10</span>
+                                </div>
+                            </div>
+                            <div class="timeline-track">
+                                <div class="timeline-segment" style="left: 0%; width: 25%; background-color: #00bcd4;">
+                                    <div class="segment-info">
+                                        <span class="segment-time">0:00 - 0:02.5</span>
+                                        <span class="segment-duration">2.5s</span>
+                                        <span class="segment-confidence">95%</span>
+                                    </div>
+                                </div>
+                                <div class="timeline-segment" style="left: 72%; width: 9%; background-color: #4CAF50;">
+                                    <div class="segment-info">
+                                        <span class="segment-time">7.2 - 8.1</span>
+                                        <span class="segment-duration">0.9s</span>
+                                        <span class="segment-confidence">88%</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="timeline-controls">
+                            <button class="control-btn">
+                                <i class="fas fa-play"></i> Preview
+                            </button>
+                            <button class="control-btn">
+                                <i class="fas fa-search-plus"></i> Zoom In
+                            </button>
+                            <button class="control-btn">
+                                <i class="fas fa-search-plus"></i> Zoom Out
+                            </button>
+                            <button class="control-btn">
+                                <i class="fas fa-download"></i> Export
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Audio Transcript Section -->
+                    <div class="transcript-section">
+                        <div class="section-header">
+                            <h4><i class="fas fa-file-alt"></i> Audio Transcript</h4>
+                            <div class="transcript-info">
+                                <span class="word-count">4 words</span>
+                            </div>
+                        </div>
+                        <div class="transcript-content">
+                            <p>This is a sample transcript of the audio content. The AI has analyzed the audio and detected silence segments.</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Detailed Analysis Results Section -->
+                    <div class="detailed-analysis-section">
+                        <div class="section-header">
+                            <h4><i class="fas fa-chart-bar"></i> Detailed Analysis Results</h4>
+                        </div>
+                        
+                        <div class="analysis-details-grid">
+                            <!-- Silence Segments Details -->
+                            <div class="detail-card">
+                                <div class="detail-header">
+                                    <i class="fas fa-volume-mute"></i>
+                                    <h5>Silence Segments Found</h5>
+                                </div>
+                                <div class="detail-content">
+                                    <div class="segment-detail">
+                                        <div class="segment-time">
+                                            <strong>Segment 1:</strong> 0:00.5 - 0:00.9 (0.4s)
+                                        </div>
+                                        <div class="segment-info">
+                                            <span class="confidence-badge high">95% Confidence</span>
+                                            <span class="method-badge">Whisper AI</span>
+                                        </div>
+                                        <div class="segment-description">
+                                            <p>Brief pause detected (0.4s). This appears to be a natural breathing pause or speech transition.</p>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="segment-detail">
+                                        <div class="segment-time">
+                                            <strong>Segment 2:</strong> 0:01.8 - 0:02.8 (1.0s)
+                                        </div>
+                                        <div class="segment-info">
+                                            <span class="confidence-badge medium">88% Confidence</span>
+                                            <span class="method-badge">Whisper AI + Web Audio</span>
+                                        </div>
+                                        <div class="segment-description">
+                                            <p>Short silence period (1.0s). Likely a natural pause in speech or content transition.</p>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="segment-detail">
+                                        <div class="segment-time">
+                                            <strong>Segment 3:</strong> 0:03.8 - 0:05.0 (1.2s)
+                                        </div>
+                                        <div class="segment-info">
+                                            <span class="confidence-badge medium">82% Confidence</span>
+                                            <span class="method-badge">FFmpeg Analysis</span>
+                                        </div>
+                                        <div class="segment-description">
+                                            <p>Medium silence duration (1.2s). Possible editing point or extended pause in content.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Audio Quality Analysis -->
+                            <div class="detail-card">
+                                <div class="detail-header">
+                                    <i class="fas fa-microphone"></i>
+                                    <h5>Audio Quality Analysis</h5>
+                                </div>
+                                <div class="detail-content">
+                                    <div class="quality-metric">
+                                        <span class="metric-label">Overall Audio Quality:</span>
+                                        <span class="metric-value excellent">Excellent (92/100)</span>
+                                    </div>
+                                    <div class="quality-metric">
+                                        <span class="metric-label">Background Noise:</span>
+                                        <span class="metric-value excellent">Very Low (5% of signal)</span>
+                                    </div>
+                                    <div class="quality-metric">
+                                        <span class="metric-label">Dynamic Range:</span>
+                                        <span class="metric-value good">Good (45 dB)</span>
+                                    </div>
+                                    <div class="quality-metric">
+                                        <span class="metric-label">Clipping Detection:</span>
+                                        <span class="metric-value excellent">None Detected</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- AI Analysis Summary -->
+                            <div class="detail-card">
+                                <div class="detail-header">
+                                    <i class="fas fa-robot"></i>
+                                    <h5>AI Analysis Summary</h5>
+                                </div>
+                                <div class="detail-content">
+                                    <div class="ai-insight">
+                                        <h6>Key Findings:</h6>
+                                        <ul>
+                                            <li><strong>Speech Clarity:</strong> High-quality speech with minimal background interference</li>
+                                            <li><strong>Silence Patterns:</strong> Natural breathing pauses and content transitions detected</li>
+                                            <li><strong>Audio Structure:</strong> Well-organized content with clear beginning and ending</li>
+                                            <li><strong>Processing Quality:</strong> AI analysis completed successfully with 88% average confidence</li>
+                                        </ul>
+                                    </div>
+                                    
+                                    <div class="ai-recommendation">
+                                        <h6>Recommendations:</h6>
+                                        <ul>
+                                            <li>✅ <strong>Auto-trim:</strong> Recommended for segments 1 and 2 (high confidence)</li>
+                                            <li>⚠️ <strong>Manual review:</strong> Suggested for segment 3 (medium confidence)</li>
+                                            <li>🎯 <strong>Quality:</strong> Audio is ready for professional use</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Technical Details -->
+                            <div class="detail-card">
+                                <div class="detail-header">
+                                    <i class="fas fa-cog"></i>
+                                    <h5>Technical Details</h5>
+                                </div>
+                                <div class="detail-content">
+                                    <div class="tech-spec">
+                                        <span class="spec-label">Analysis Duration:</span>
+                                        <span class="spec-value">200ms</span>
+                                    </div>
+                                    <div class="tech-spec">
+                                        <span class="spec-label">Audio Format:</span>
+                                        <span class="spec-value">MP3, 44.1kHz, 128kbps</span>
+                                    </div>
+                                    <div class="tech-spec">
+                                        <span class="spec-label">File Size:</span>
+                                        <span class="spec-value">2.4 MB</span>
+                                    </div>
+                                    <div class="tech-spec">
+                                        <span class="spec-label">Processing Method:</span>
+                                        <span class="spec-value">Multi-algorithm + AI validation</span>
+                                    </div>
+                                    <div class="tech-spec">
+                                        <span class="spec-label">Confidence Algorithm:</span>
+                                        <span class="spec-value">Weighted consensus scoring</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function resetDemo() {
+            demoResults = [];
+            hideEnhancedUI();
+            console.log('Demo reset');
+        }
+    </script>
+</body>
+
+</html>

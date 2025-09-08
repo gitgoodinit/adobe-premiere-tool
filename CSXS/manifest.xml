@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ExtensionManifest Version="7.0" ExtensionBundleId="com.mediatools.premiereplugin" ExtensionBundleVersion="1.0.0"
+                   ExtensionBundleName="Media Tools Pro" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <ExtensionList>
+    <Extension Id="com.mediatools.premiereplugin.panel" Version="1.0.0"/>
+  </ExtensionList>
+  <ExecutionEnvironment>
+    <HostList>
+      <Host Name="PPRO" Version="[0.0,99.9]"/>
+    </HostList>
+    <LocaleList>
+      <Locale Code="All"/>
+    </LocaleList>
+    <RequiredRuntimeList>
+      <RequiredRuntime Name="CSXS" Version="12.0"/>
+    </RequiredRuntimeList>
+  </ExecutionEnvironment>
+  <DispatchInfoList>
+    <Extension Id="com.mediatools.premiereplugin.panel">
+      <DispatchInfo>
+        <Resources>
+          <MainPath>./index.html</MainPath>
+          <ScriptPath>./host/index.jsx</ScriptPath>
+        </Resources>
+        <CEFCommandLine>
+          <Parameter>--enable-nodejs</Parameter>
+          <Parameter>--mixed-context</Parameter>
+        </CEFCommandLine>
+        <Lifecycle>
+          <AutoVisible>true</AutoVisible>
+        </Lifecycle>
+        <UI>
+          <Type>Panel</Type>
+          <Menu>Media Tools Pro</Menu>
+          <Geometry>
+            <Size>
+              <Width>400</Width>
+              <Height>700</Height>
+            </Size>
+            <MinSize>
+              <Width>350</Width>
+              <Height>600</Height>
+            </MinSize>
+            <MaxSize>
+              <Width>600</Width>
+              <Height>1000</Height>
+            </MaxSize>
+          </Geometry>
+          <Icons>
+            <Icon Type="Normal">./icons/icon-normal.png</Icon>
+            <Icon Type="RollOver">./icons/icon-rollover.png</Icon>
+            <Icon Type="DarkNormal">./icons/icon-dark-normal.png</Icon>
+            <Icon Type="DarkRollOver">./icons/icon-dark-rollover.png</Icon>
+          </Icons>
+        </UI>
+      </DispatchInfo>
+    </Extension>
+  </DispatchInfoList>
+</ExtensionManifest>
