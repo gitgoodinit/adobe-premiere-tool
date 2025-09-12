@@ -16485,7 +16485,7 @@ AudioToolsPro.prototype.displayOverlapResults = function(results) {
     this.activateResultsTab('overlap');
 };
 
-AudioToolsPro.prototype.playOverlapSegment = async function(index) {
+AudioToolsPro.prototype.playOverlapSegment = async function(index, useResolved = null) {
     if (!this.lastOverlapResults || !this.lastOverlapResults.overlaps[index]) {
         this.showUIMessage('❌ Overlap segment not found', 'error');
         return;
@@ -16493,19 +16493,60 @@ AudioToolsPro.prototype.playOverlapSegment = async function(index) {
     
     const overlap = this.lastOverlapResults.overlaps[index];
     
+    // Determine which audio to use
+    let audioType = 'original';
+    let audioBuffer = null;
+    
+    if (useResolved === true && this.lastOverlapResults.duckedMusicBuffer) {
+        audioType = 'resolved';
+        audioBuffer = this.lastOverlapResults.duckedMusicBuffer;
+    } else if (useResolved === false || !this.lastOverlapResults.isResolved) {
+        audioType = 'original';
+        // Use original audio file
+    } else {
+        // Auto-detect
+        if (this.lastOverlapResults.isResolved && this.lastOverlapResults.duckedMusicBuffer) {
+            audioType = 'resolved';
+            audioBuffer = this.lastOverlapResults.duckedMusicBuffer;
+        }
+    }
+    
     try {
-        const audioBlob = await this.getAudioFileForAnalysis();
-        const audioUrl = URL.createObjectURL(audioBlob);
+        this.log(`🎵 Playing ${audioType} overlap segment ${index + 1}`, 'info');
         
-        const audio = new Audio(audioUrl);
-        audio.currentTime = overlap.startTime;
+        let audio;
         
-        await audio.play();
+        if (audioBuffer && audioType === 'resolved') {
+            // Create audio from resolved buffer
+            const audioBlob = this.audioBufferToBlob(audioBuffer, overlap.startTime, overlap.endTime);
+            const audioUrl = URL.createObjectURL(audioBlob);
+            audio = new Audio(audioUrl);
+            
+            await audio.play();
+            
+            // Clean up after playback
+            setTimeout(() => {
+                audio.pause();
+                URL.revokeObjectURL(audioUrl);
+            }, (overlap.endTime - overlap.startTime) * 1000);
+            
+        } else {
+            // Use original audio file
+            const audioBlob = await this.getAudioFileForAnalysis();
+            const audioUrl = URL.createObjectURL(audioBlob);
+            
+            audio = new Audio(audioUrl);
+            audio.currentTime = overlap.startTime;
+            
+            await audio.play();
+            
+            setTimeout(() => {
+                audio.pause();
+                URL.revokeObjectURL(audioUrl);
+            }, (overlap.endTime - overlap.startTime) * 1000);
+        }
         
-        setTimeout(() => {
-            audio.pause();
-            URL.revokeObjectURL(audioUrl);
-        }, overlap.duration * 1000);
+        this.showUIMessage(`🎵 Playing ${audioType} overlap segment ${index + 1}`, 'info');
         
         this.showUIMessage(`🎵 Playing overlap at ${this.formatTime(overlap.startTime)}`, 'info');
         

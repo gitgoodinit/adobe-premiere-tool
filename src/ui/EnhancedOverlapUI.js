@@ -254,6 +254,41 @@ class EnhancedOverlapUI {
                             <span>Reset</span>
                         </button>
                     </div>
+                    
+                    <!-- Audio Playback Controls (shown after resolution) -->
+                    <div class="audio-playback-section" id="audioPlaybackSection" style="display: none;">
+                        <div class="playback-header">
+                            <h4><i class="fas fa-headphones"></i> Audio Comparison</h4>
+                            <p>Compare the original audio with the resolved version</p>
+                        </div>
+                        <div class="playback-controls">
+                            <div class="playback-group">
+                                <label>Original Audio</label>
+                                <div class="audio-control-row">
+                                    <button class="action-btn secondary" id="playOriginalOverlap">
+                                        <i class="fas fa-play"></i> Play Original
+                                    </button>
+                                    <button class="action-btn secondary" id="stopOriginalOverlap">
+                                        <i class="fas fa-stop"></i> Stop
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="playback-group">
+                                <label>Resolved Audio</label>
+                                <div class="audio-control-row">
+                                    <button class="action-btn primary" id="playResolvedOverlap">
+                                        <i class="fas fa-play"></i> Play Resolved
+                                    </button>
+                                    <button class="action-btn secondary" id="stopResolvedOverlap">
+                                        <i class="fas fa-stop"></i> Stop
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="playback-info" id="playbackInfo">
+                            <div class="playback-status">Ready to play</div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Progress Indicator -->
@@ -334,6 +369,12 @@ class EnhancedOverlapUI {
         document.getElementById('applyResolution')?.addEventListener('click', () => this.applyResolution());
         document.getElementById('previewResolution')?.addEventListener('click', () => this.previewResolution());
         document.getElementById('resetResolution')?.addEventListener('click', () => this.resetResolution());
+
+        // Audio playback controls
+        document.getElementById('playOriginalOverlap')?.addEventListener('click', () => this.playOriginalAudio());
+        document.getElementById('stopOriginalOverlap')?.addEventListener('click', () => this.stopOriginalAudio());
+        document.getElementById('playResolvedOverlap')?.addEventListener('click', () => this.playResolvedAudio());
+        document.getElementById('stopResolvedOverlap')?.addEventListener('click', () => this.stopResolvedAudio());
 
         // Timeline interaction
         if (this.canvas) {
@@ -792,6 +833,541 @@ class EnhancedOverlapUI {
             this.app.log(`❌ Frequency filtering failed: ${error.message}`, 'error');
             throw error;
         }
+    }
+
+    // Apply Resolution - Main resolution function called by the Apply Resolution button
+    async applyResolution() {
+        this.app.log('🔧 Starting overlap resolution process...', 'info');
+        
+        try {
+            // Check if we have overlaps to resolve
+            if (!this.currentOverlaps || this.currentOverlaps.length === 0) {
+                this.app.showUIMessage('⚠️ No overlaps detected. Run detection first.', 'warning');
+                return;
+            }
+
+            // Get selected overlaps or use all if none selected
+            let overlapsToResolve = this.getSelectedOverlaps();
+            if (overlapsToResolve.length === 0) {
+                overlapsToResolve = this.currentOverlaps;
+                this.app.log('🔧 No overlaps selected, resolving all detected overlaps', 'info');
+            }
+
+            this.app.log(`🔧 Resolving ${overlapsToResolve.length} overlaps...`, 'info');
+            this.app.showUIMessage(`🔧 Resolving ${overlapsToResolve.length} overlaps...`, 'processing');
+
+            // Show progress
+            this.showProgress(true);
+            this.updateProgress(0, 'Starting resolution...');
+
+            // Get resolution options
+            const resolutionOptions = this.getResolutionOptions();
+            this.app.log(`🔧 Resolution options: ${JSON.stringify(resolutionOptions)}`, 'info');
+
+            // Apply resolution to each overlap
+            let resolvedCount = 0;
+            for (let i = 0; i < overlapsToResolve.length; i++) {
+                const overlap = overlapsToResolve[i];
+                const progress = ((i + 1) / overlapsToResolve.length) * 100;
+                
+                this.updateProgress(progress, `Resolving overlap ${i + 1}/${overlapsToResolve.length}`);
+                
+                try {
+                    await this.resolveIndividualOverlap(overlap, resolutionOptions);
+                    resolvedCount++;
+                    
+                    // Update UI to show this overlap as resolved (use overlap index in original array)
+                    const overlapIndex = this.currentOverlaps.indexOf(overlap);
+                    this.markOverlapAsResolved(overlapIndex);
+                    
+                    this.app.log(`✅ Overlap ${i + 1} resolved and marked in UI`, 'info');
+                    
+                } catch (error) {
+                    this.app.log(`⚠️ Failed to resolve overlap ${i + 1}: ${error.message}`, 'warning');
+                }
+                
+                // Small delay for UI feedback
+                await new Promise(resolve => setTimeout(resolve, 200));
+            }
+
+            // Hide progress and show results
+            this.showProgress(false);
+            
+            if (resolvedCount > 0) {
+                this.app.log(`✅ Successfully resolved ${resolvedCount}/${overlapsToResolve.length} overlaps`, 'success');
+                this.app.showUIMessage(`✅ Successfully resolved ${resolvedCount} overlaps!`, 'success');
+                this.updateAnalysisStatus('resolved', `Resolved ${resolvedCount} overlaps`);
+                
+                // Show audio playback controls for before/after comparison
+                this.showAudioPlaybackControls();
+            } else {
+                this.app.log('⚠️ No overlaps were successfully resolved', 'warning');
+                this.app.showUIMessage('⚠️ No overlaps were successfully resolved', 'warning');
+            }
+
+        } catch (error) {
+            this.showProgress(false);
+            this.app.log(`❌ Resolution process failed: ${error.message}`, 'error');
+            this.app.showUIMessage(`❌ Resolution failed: ${error.message}`, 'error');
+        }
+    }
+
+    // Preview Resolution - Show what changes would be made
+    async previewResolution() {
+        this.app.log('👁️ Previewing resolution changes...', 'info');
+        
+        const selectedOverlaps = this.getSelectedOverlaps();
+        if (selectedOverlaps.length === 0) {
+            this.app.showUIMessage('⚠️ Please select overlaps to preview resolution', 'warning');
+            return;
+        }
+
+        const resolutionOptions = this.getResolutionOptions();
+        
+        // Create preview summary
+        let previewHTML = `
+            <div class="resolution-preview">
+                <h4>Resolution Preview</h4>
+                <p>The following changes will be applied to ${selectedOverlaps.length} overlaps:</p>
+                <ul>
+        `;
+
+        selectedOverlaps.forEach((overlap, index) => {
+            const startTime = this.formatTime(overlap.startTime || 0);
+            const endTime = this.formatTime(overlap.endTime || overlap.startTime + overlap.duration || 1);
+            
+            previewHTML += `<li>Overlap ${index + 1} (${startTime} - ${endTime}):`;
+            
+            if (resolutionOptions.enableAudioDucking) {
+                previewHTML += ` Audio ducking (-${resolutionOptions.duckingAmount}dB)`;
+            }
+            if (resolutionOptions.enableClipShifting) {
+                previewHTML += ` Clip shifting (±${resolutionOptions.shiftTolerance}s)`;
+            }
+            if (resolutionOptions.enableFrequencyFiltering) {
+                previewHTML += ` Frequency filtering (${resolutionOptions.filterIntensity}%)`;
+            }
+            
+            previewHTML += `</li>`;
+        });
+
+        previewHTML += `
+                </ul>
+                <div class="preview-actions">
+                    <button onclick="this.closePreview()" class="btn-secondary">Cancel</button>
+                    <button onclick="this.applyResolution()" class="btn-primary">Apply Changes</button>
+                </div>
+            </div>
+        `;
+
+        // Show preview in a modal or dedicated area
+        this.showPreviewModal(previewHTML);
+    }
+
+    // Reset Resolution - Clear resolution settings
+    resetResolution() {
+        this.app.log('🔄 Resetting resolution settings...', 'info');
+        
+        // Reset all checkboxes and sliders to defaults
+        const audioducking = document.getElementById('enableAudioDucking');
+        const clipShifting = document.getElementById('enableClipShifting');
+        const freqFiltering = document.getElementById('enableFrequencyFiltering');
+        
+        if (audioducking) audioducking.checked = true;
+        if (clipShifting) clipShifting.checked = false;
+        if (freqFiltering) freqFiltering.checked = false;
+
+        // Reset sliders
+        const duckingSlider = document.getElementById('duckingAmount');
+        const shiftSlider = document.getElementById('shiftTolerance');
+        const filterSlider = document.getElementById('filterIntensity');
+
+        if (duckingSlider) duckingSlider.value = 50;
+        if (shiftSlider) shiftSlider.value = 30;
+        if (filterSlider) filterSlider.value = 40;
+
+        // Clear any resolved states
+        document.querySelectorAll('.overlap-item.resolved').forEach(item => {
+            item.classList.remove('resolved');
+            item.style.opacity = '1';
+        });
+
+        // Reset resolve buttons
+        document.querySelectorAll('[data-action="resolve"]').forEach(btn => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-magic"></i>';
+            btn.style.backgroundColor = '';
+            btn.title = 'Resolve this overlap';
+        });
+
+        this.app.showUIMessage('🔄 Resolution settings reset', 'info');
+    }
+
+    // Mark individual overlap as resolved in UI
+    markOverlapAsResolved(overlapIndex) {
+        const overlapItem = document.querySelector(`[data-index="${overlapIndex}"]`)?.closest('.overlap-item');
+        const resolveBtn = document.querySelector(`[data-index="${overlapIndex}"][data-action="resolve"]`);
+
+        if (overlapItem) {
+            overlapItem.classList.add('resolved');
+            overlapItem.style.opacity = '0.7';
+        }
+
+        if (resolveBtn) {
+            resolveBtn.innerHTML = '<i class="fas fa-check"></i> Resolved';
+            resolveBtn.disabled = true;
+            resolveBtn.style.backgroundColor = '#28a745';
+            resolveBtn.title = 'Overlap resolved';
+        }
+    }
+
+    // Show preview modal
+    showPreviewModal(content) {
+        // Create modal if it doesn't exist
+        let modal = document.getElementById('resolutionPreviewModal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'resolutionPreviewModal';
+            modal.className = 'modal-overlay';
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3>Resolution Preview</h3>
+                        <button class="modal-close" onclick="this.closePreview()">×</button>
+                    </div>
+                    <div class="modal-body" id="previewContent"></div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+
+        document.getElementById('previewContent').innerHTML = content;
+        modal.style.display = 'flex';
+    }
+
+    // Close preview modal
+    closePreview() {
+        const modal = document.getElementById('resolutionPreviewModal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    }
+
+    // ========================================
+    // AUDIO PLAYBACK METHODS
+    // ========================================
+
+    // Show audio playback controls after resolution
+    showAudioPlaybackControls() {
+        const playbackSection = document.getElementById('audioPlaybackSection');
+        if (playbackSection) {
+            playbackSection.style.display = 'block';
+            this.app.log('🎵 Audio playback controls now available', 'info');
+            
+            // Update playback info
+            const playbackInfo = document.getElementById('playbackInfo');
+            if (playbackInfo) {
+                playbackInfo.innerHTML = `
+                    <div class="playback-status">
+                        <i class="fas fa-check-circle" style="color: #4CAF50;"></i>
+                        Resolution complete - Ready to compare audio
+                    </div>
+                `;
+            }
+        }
+    }
+
+    // Play original (unprocessed) audio for all resolved overlaps
+    async playOriginalAudio() {
+        if (!this.currentOverlaps || this.currentOverlaps.length === 0) {
+            this.app.showUIMessage('⚠️ No overlaps available for playback', 'warning');
+            return;
+        }
+
+        try {
+            this.updatePlaybackStatus('🎵 Playing original audio...', 'playing');
+            this.app.log('🎵 Playing original audio for overlaps', 'info');
+
+            // Get overlaps to play - use all available overlaps
+            let overlapsToPlay = [];
+            
+            // First try to find overlaps marked as resolved in the UI
+            overlapsToPlay = this.currentOverlaps.filter(overlap => {
+                const index = this.currentOverlaps.indexOf(overlap);
+                return document.querySelector(`[data-index="${index}"]`)?.closest('.overlap-item')?.classList.contains('resolved');
+            });
+            
+            // If no UI-marked overlaps found, use all overlaps (since resolution was applied)
+            if (overlapsToPlay.length === 0) {
+                overlapsToPlay = this.currentOverlaps;
+                this.app.log('🎵 Using all overlaps for original audio playback', 'info');
+            }
+
+            if (overlapsToPlay.length === 0) {
+                this.app.showUIMessage('⚠️ No overlaps available for playback', 'warning');
+                return;
+            }
+
+            // Play each overlap from original audio
+            for (let i = 0; i < overlapsToPlay.length; i++) {
+                const overlap = overlapsToPlay[i];
+                this.updatePlaybackStatus(`🎵 Playing original segment ${i + 1}/${overlapsToPlay.length}`, 'playing');
+                
+                // Use the main app's playback functionality with original audio
+                if (this.app.playOverlapSegment) {
+                    await this.app.playOverlapSegment(this.currentOverlaps.indexOf(overlap), false); // false = original
+                } else {
+                    // Fallback to basic playback
+                    await this.playOverlapSegment(overlap, false);
+                }
+                
+                // Small delay between segments
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+
+            this.updatePlaybackStatus('✅ Original audio playback complete', 'complete');
+
+        } catch (error) {
+            this.app.log(`❌ Original audio playback failed: ${error.message}`, 'error');
+            this.updatePlaybackStatus('❌ Playback failed', 'error');
+        }
+    }
+
+    // Play resolved (processed) audio for all resolved overlaps
+    async playResolvedAudio() {
+        if (!this.currentOverlaps || this.currentOverlaps.length === 0) {
+            this.app.showUIMessage('⚠️ No overlaps available for playback', 'warning');
+            return;
+        }
+
+        try {
+            this.updatePlaybackStatus('🎵 Playing resolved audio...', 'playing');
+            this.app.log('🎵 Playing resolved audio for processed overlaps', 'info');
+
+            // Get overlaps to play - use all available overlaps
+            let overlapsToPlay = [];
+            
+            // First try to find overlaps marked as resolved in the UI
+            overlapsToPlay = this.currentOverlaps.filter(overlap => {
+                const index = this.currentOverlaps.indexOf(overlap);
+                return document.querySelector(`[data-index="${index}"]`)?.closest('.overlap-item')?.classList.contains('resolved');
+            });
+            
+            // If no UI-marked overlaps found, use all overlaps (since resolution was applied)
+            if (overlapsToPlay.length === 0) {
+                overlapsToPlay = this.currentOverlaps;
+                this.app.log('🎵 Using all overlaps for resolved audio playback', 'info');
+            }
+
+            if (overlapsToPlay.length === 0) {
+                this.app.showUIMessage('⚠️ No overlaps available for playback', 'warning');
+                return;
+            }
+
+            // Play each overlap from processed audio
+            for (let i = 0; i < overlapsToPlay.length; i++) {
+                const overlap = overlapsToPlay[i];
+                this.updatePlaybackStatus(`🎵 Playing resolved segment ${i + 1}/${overlapsToPlay.length}`, 'playing');
+                
+                // Use the main app's playback functionality with resolved audio
+                if (this.app.playOverlapSegment) {
+                    await this.app.playOverlapSegment(this.currentOverlaps.indexOf(overlap), true); // true = resolved
+                } else {
+                    // Fallback to basic playback
+                    await this.playOverlapSegment(overlap, true);
+                }
+                
+                // Small delay between segments
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+
+            this.updatePlaybackStatus('✅ Resolved audio playback complete', 'complete');
+
+        } catch (error) {
+            this.app.log(`❌ Resolved audio playback failed: ${error.message}`, 'error');
+            this.updatePlaybackStatus('❌ Playback failed', 'error');
+        }
+    }
+
+    // Stop original audio playback
+    stopOriginalAudio() {
+        this.app.log('🛑 Stopping original audio playback', 'info');
+        
+        // Stop any active audio playback
+        if (this.app.audioPlayer && !this.app.audioPlayer.paused) {
+            this.app.audioPlayer.pause();
+        }
+        
+        // Stop Web Audio API sources
+        if (this.app.currentAudioSource) {
+            try {
+                this.app.currentAudioSource.stop();
+            } catch (error) {
+                // Source might already be stopped
+            }
+        }
+        
+        this.updatePlaybackStatus('⏹️ Original audio stopped', 'stopped');
+    }
+
+    // Stop resolved audio playback
+    stopResolvedAudio() {
+        this.app.log('🛑 Stopping resolved audio playback', 'info');
+        
+        // Stop any active audio playback
+        if (this.app.audioPlayer && !this.app.audioPlayer.paused) {
+            this.app.audioPlayer.pause();
+        }
+        
+        // Stop Web Audio API sources
+        if (this.app.currentAudioSource) {
+            try {
+                this.app.currentAudioSource.stop();
+            } catch (error) {
+                // Source might already be stopped
+            }
+        }
+        
+        this.updatePlaybackStatus('⏹️ Resolved audio stopped', 'stopped');
+    }
+
+    // Play individual overlap segment
+    async playOverlapSegment(overlap, useResolved = false) {
+        const startTime = overlap.startTime || 0;
+        const endTime = overlap.endTime || startTime + (overlap.duration || 1);
+        const duration = endTime - startTime;
+        
+        this.app.log(`🎵 Playing ${useResolved ? 'resolved' : 'original'} overlap: ${startTime.toFixed(2)}s - ${endTime.toFixed(2)}s`, 'info');
+        
+        // Create a simple audio element for playback
+        const audio = new Audio();
+        
+        if (useResolved && this.app.lastOverlapResults?.duckedMusicBuffer) {
+            // Create blob from resolved audio buffer
+            const audioBlob = this.audioBufferToBlob(this.app.lastOverlapResults.duckedMusicBuffer, startTime, endTime);
+            audio.src = URL.createObjectURL(audioBlob);
+        } else {
+            // Use original audio
+            audio.src = this.app.audioPlayer?.src || this.app.currentAudioBlob ? URL.createObjectURL(this.app.currentAudioBlob) : '';
+            audio.currentTime = startTime;
+        }
+        
+        // Play the segment
+        return new Promise((resolve, reject) => {
+            audio.addEventListener('loadeddata', () => {
+                audio.play().then(() => {
+                    // Stop after the segment duration
+                    setTimeout(() => {
+                        audio.pause();
+                        resolve();
+                    }, duration * 1000);
+                }).catch(reject);
+            });
+            
+            audio.addEventListener('error', reject);
+        });
+    }
+
+    // Update playback status display
+    updatePlaybackStatus(message, status = 'info') {
+        const playbackInfo = document.getElementById('playbackInfo');
+        if (!playbackInfo) return;
+
+        let icon = '🎵';
+        let color = '#4CAF50';
+
+        switch (status) {
+            case 'playing':
+                icon = '🎵';
+                color = '#2196F3';
+                break;
+            case 'stopped':
+                icon = '⏹️';
+                color = '#FF9800';
+                break;
+            case 'error':
+                icon = '❌';
+                color = '#F44336';
+                break;
+            case 'complete':
+                icon = '✅';
+                color = '#4CAF50';
+                break;
+        }
+
+        playbackInfo.innerHTML = `
+            <div class="playback-status" style="color: ${color};">
+                ${icon} ${message}
+            </div>
+        `;
+    }
+
+    // Convert audio buffer to blob for playback
+    audioBufferToBlob(audioBuffer, startTime = 0, endTime = null) {
+        if (!audioBuffer) return null;
+        
+        const sampleRate = audioBuffer.sampleRate;
+        const numberOfChannels = audioBuffer.numberOfChannels;
+        const startSample = Math.floor(startTime * sampleRate);
+        const endSample = endTime ? Math.floor(endTime * sampleRate) : audioBuffer.length;
+        const length = endSample - startSample;
+        
+        // Create a new buffer with the segment
+        const segmentBuffer = this.app.audioContext.createBuffer(numberOfChannels, length, sampleRate);
+        
+        for (let channel = 0; channel < numberOfChannels; channel++) {
+            const channelData = audioBuffer.getChannelData(channel);
+            const segmentData = segmentBuffer.getChannelData(channel);
+            
+            for (let i = 0; i < length; i++) {
+                segmentData[i] = channelData[startSample + i];
+            }
+        }
+        
+        // Convert to WAV blob
+        return this.audioBufferToWav(segmentBuffer);
+    }
+
+    // Convert audio buffer to WAV blob
+    audioBufferToWav(audioBuffer) {
+        const numberOfChannels = audioBuffer.numberOfChannels;
+        const sampleRate = audioBuffer.sampleRate;
+        const length = audioBuffer.length;
+        const buffer = new ArrayBuffer(44 + length * numberOfChannels * 2);
+        const view = new DataView(buffer);
+        
+        // WAV header
+        const writeString = (offset, string) => {
+            for (let i = 0; i < string.length; i++) {
+                view.setUint8(offset + i, string.charCodeAt(i));
+            }
+        };
+        
+        writeString(0, 'RIFF');
+        view.setUint32(4, 36 + length * numberOfChannels * 2, true);
+        writeString(8, 'WAVE');
+        writeString(12, 'fmt ');
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true);
+        view.setUint16(22, numberOfChannels, true);
+        view.setUint32(24, sampleRate, true);
+        view.setUint32(28, sampleRate * numberOfChannels * 2, true);
+        view.setUint16(32, numberOfChannels * 2, true);
+        view.setUint16(34, 16, true);
+        writeString(36, 'data');
+        view.setUint32(40, length * numberOfChannels * 2, true);
+        
+        // Convert audio data
+        let offset = 44;
+        for (let i = 0; i < length; i++) {
+            for (let channel = 0; channel < numberOfChannels; channel++) {
+                const sample = Math.max(-1, Math.min(1, audioBuffer.getChannelData(channel)[i]));
+                view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+                offset += 2;
+            }
+        }
+        
+        return new Blob([buffer], { type: 'audio/wav' });
     }
 
     // ========================================
