@@ -1,0 +1,878 @@
+/* Enhanced Overlap Detection UI Styles */
+
+.enhanced-overlap-ui {
+    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+    border-radius: 12px;
+    padding: 20px;
+    color: #ffffff;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    margin: 20px 0;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+/* Header Section */
+.overlap-header {
+    margin-bottom: 20px;
+}
+
+.header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.header-left h3 {
+    margin: 0 0 5px 0;
+    font-size: 24px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.header-left h3 i {
+    color: #4a90e2;
+}
+
+.header-subtitle {
+    margin: 0;
+    opacity: 0.8;
+    font-size: 14px;
+}
+
+.analysis-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 8px 16px;
+    border-radius: 20px;
+    backdrop-filter: blur(10px);
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+}
+
+.status-dot.ready { background: #28a745; }
+.status-dot.processing { background: #ffc107; }
+.status-dot.completed { background: #17a2b8; }
+.status-dot.resolved { background: #6f42c1; }
+.status-dot.error { background: #dc3545; }
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.status-text {
+    font-size: 12px;
+    font-weight: 500;
+}
+
+/* Quick Stats Panel */
+.quick-stats-panel {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.stat-card {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 16px;
+    flex: 1;
+    min-width: 120px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    transition: all 0.3s ease;
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.stat-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: linear-gradient(45deg, #4a90e2, #357abd);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+}
+
+.stat-content {
+    flex: 1;
+}
+
+.stat-number {
+    font-size: 20px;
+    font-weight: bold;
+    color: #ffffff;
+    margin: 0;
+}
+
+.stat-label {
+    font-size: 11px;
+    opacity: 0.8;
+    margin: 2px 0 0 0;
+}
+
+/* Audio Information Panel */
+.audio-info-panel {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 18px;
+    margin-bottom: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.panel-header {
+    margin-bottom: 15px;
+}
+
+.panel-header h4 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.panel-header h4 i {
+    color: #4a90e2;
+}
+
+.audio-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+}
+
+.info-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.info-item label {
+    font-weight: 500;
+    opacity: 0.8;
+    font-size: 13px;
+}
+
+.info-item span {
+    font-weight: 600;
+    color: #4a90e2;
+    font-size: 13px;
+}
+
+/* Results Toolbar */
+.results-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.08);
+    padding: 12px 16px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.filter-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.filter-label {
+    font-size: 13px;
+    font-weight: 500;
+    opacity: 0.9;
+}
+
+.filter-select {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    color: #ffffff;
+    padding: 6px 10px;
+    font-size: 12px;
+    min-width: 120px;
+}
+
+.filter-select:focus {
+    outline: none;
+    border-color: #4a90e2;
+}
+
+.bulk-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.action-btn {
+    background: linear-gradient(45deg, #4a90e2, #357abd);
+    color: #ffffff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 36px;
+}
+
+.action-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(74, 144, 226, 0.3);
+}
+
+.action-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.action-btn.small {
+    padding: 6px 10px;
+    font-size: 11px;
+}
+
+.action-btn.secondary {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.action-btn.primary {
+    background: linear-gradient(45deg, #28a745, #20c997);
+}
+
+.action-btn.large {
+    padding: 12px 20px;
+    font-size: 14px;
+}
+
+/* Timeline Visualization */
+.timeline-visualization {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.timeline-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.timeline-header h4 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.timeline-controls {
+    display: flex;
+    gap: 5px;
+}
+
+.timeline-btn {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.timeline-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.timeline-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.timeline-container {
+    position: relative;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+#waveformCanvas {
+    width: 100%;
+    height: 100px;
+    display: block;
+    cursor: crosshair;
+}
+
+.overlap-markers {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+.overlap-marker {
+    position: absolute;
+    top: 10px;
+    height: 80px;
+    background: rgba(255, 193, 7, 0.4);
+    border: 2px solid rgba(255, 193, 7, 0.8);
+    border-radius: 4px;
+    cursor: pointer;
+    pointer-events: auto;
+    transition: all 0.2s ease;
+}
+
+.overlap-marker:hover {
+    background: rgba(255, 193, 7, 0.6);
+    transform: translateY(-1px);
+}
+
+.timeline-playhead {
+    position: absolute;
+    top: 0;
+    width: 2px;
+    height: 100%;
+    background: #dc3545;
+    z-index: 10;
+    transition: left 0.1s ease;
+}
+
+.timeline-playhead::before {
+    content: '';
+    position: absolute;
+    top: -4px;
+    left: -4px;
+    width: 10px;
+    height: 10px;
+    background: #dc3545;
+    border-radius: 50%;
+}
+
+/* Overlap Items */
+.overlap-items-container {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 20px;
+}
+
+.items-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.items-header h4 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sort-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sort-controls label {
+    font-size: 12px;
+    opacity: 0.8;
+}
+
+.overlap-items-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* Individual Overlap Item */
+.overlap-item {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    border-left: 4px solid #4a90e2;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.overlap-item:hover {
+    background: rgba(255, 255, 255, 0.12);
+    transform: translateX(4px);
+}
+
+.overlap-item.resolved {
+    opacity: 0.6;
+    background: rgba(40, 167, 69, 0.2);
+    border-left-color: #28a745;
+}
+
+.overlap-item.resolved::after {
+    content: '✓ Resolved';
+    position: absolute;
+    top: 8px;
+    right: 12px;
+    background: #28a745;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: bold;
+}
+
+/* Severity Classes */
+.overlap-item.critical { border-left-color: #dc3545; }
+.overlap-item.high { border-left-color: #fd7e14; }
+.overlap-item.medium { border-left-color: #ffc107; }
+.overlap-item.low { border-left-color: #28a745; }
+.overlap-item.minimal { border-left-color: #6c757d; }
+
+.overlap-checkbox {
+    display: flex;
+    align-items: center;
+}
+
+.overlap-checkbox input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: #4a90e2;
+    cursor: pointer;
+}
+
+.overlap-main-info {
+    flex: 1;
+}
+
+.overlap-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.overlap-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.overlap-name {
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.overlap-type {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 500;
+}
+
+.overlap-severity {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.severity-bar {
+    width: 60px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.severity-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #28a745, #ffc107, #dc3545);
+    transition: width 0.3s ease;
+}
+
+.severity-text {
+    font-size: 12px;
+    font-weight: 600;
+    min-width: 35px;
+}
+
+.overlap-details {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    font-size: 12px;
+    opacity: 0.9;
+}
+
+.overlap-details > div {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.overlap-details i {
+    color: #4a90e2;
+}
+
+.duration {
+    font-weight: 600;
+    color: #ffc107;
+}
+
+.overlap-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.overlap-action-btn {
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    font-size: 12px;
+}
+
+.overlap-action-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.1);
+}
+
+.overlap-action-btn.preview:hover { background: rgba(23, 162, 184, 0.8); }
+.overlap-action-btn.resolve:hover { background: rgba(40, 167, 69, 0.8); }
+.overlap-action-btn.details:hover { background: rgba(74, 144, 226, 0.8); }
+
+/* Resolution Panel */
+.resolution-panel {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 18px;
+    margin-bottom: 20px;
+}
+
+.resolution-methods {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.method-option {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 15px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.method-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    margin-bottom: 10px;
+}
+
+.method-checkbox input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: #4a90e2;
+}
+
+.method-info {
+    flex: 1;
+}
+
+.method-title {
+    font-weight: 600;
+    font-size: 14px;
+    display: block;
+    margin-bottom: 2px;
+}
+
+.method-description {
+    font-size: 12px;
+    opacity: 0.8;
+}
+
+.method-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+    padding-left: 30px;
+}
+
+.method-controls label {
+    font-size: 12px;
+    opacity: 0.9;
+    min-width: 100px;
+}
+
+.method-controls input[type="range"] {
+    flex: 1;
+    max-width: 150px;
+}
+
+.method-controls span {
+    font-weight: 600;
+    color: #4a90e2;
+    min-width: 40px;
+    font-size: 12px;
+}
+
+.resolution-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.btn-content {
+    text-align: center;
+}
+
+.btn-text {
+    display: block;
+    font-weight: 600;
+}
+
+.btn-subtitle {
+    display: block;
+    font-size: 10px;
+    opacity: 0.8;
+    margin-top: 2px;
+}
+
+/* Progress Indicator */
+.progress-indicator {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.9);
+    color: #ffffff;
+    padding: 30px;
+    border-radius: 12px;
+    z-index: 1000;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    min-width: 300px;
+}
+
+.progress-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+}
+
+.progress-icon {
+    font-size: 32px;
+    color: #4a90e2;
+}
+
+.progress-text {
+    text-align: center;
+}
+
+.progress-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 5px;
+}
+
+.progress-subtitle {
+    font-size: 12px;
+    opacity: 0.8;
+}
+
+.progress-bar-container {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.progress-bar {
+    flex: 1;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #4a90e2, #28a745);
+    transition: width 0.3s ease;
+}
+
+.progress-percentage {
+    font-size: 12px;
+    font-weight: 600;
+    min-width: 40px;
+    text-align: right;
+}
+
+/* No Overlaps State */
+.no-overlaps-state {
+    text-align: center;
+    padding: 40px 20px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    margin-top: 20px;
+}
+
+.no-overlaps-icon {
+    font-size: 48px;
+    color: #28a745;
+    margin-bottom: 20px;
+}
+
+.no-overlaps-text h3 {
+    margin: 0 0 10px 0;
+    color: #28a745;
+}
+
+.no-overlaps-text p {
+    margin: 0 0 20px 0;
+    opacity: 0.8;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .enhanced-overlap-ui {
+        padding: 15px;
+    }
+
+    .quick-stats-panel {
+        flex-direction: column;
+    }
+
+    .results-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .filter-controls,
+    .bulk-actions {
+        justify-content: center;
+    }
+
+    .overlap-item {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+
+    .overlap-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+
+    .overlap-details {
+        justify-content: space-around;
+    }
+
+    .timeline-header {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .resolution-actions {
+        flex-direction: column;
+    }
+}
+
+/* Animations */
+@keyframes slideInFromRight {
+    from {
+        transform: translateX(20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.overlap-item {
+    animation: slideInFromRight 0.3s ease;
+}
+
+.overlap-item:nth-child(1) { animation-delay: 0.1s; }
+.overlap-item:nth-child(2) { animation-delay: 0.2s; }
+.overlap-item:nth-child(3) { animation-delay: 0.3s; }
+.overlap-item:nth-child(4) { animation-delay: 0.4s; }
+.overlap-item:nth-child(5) { animation-delay: 0.5s; }
+
+/* Scrollbar Styling */
+.overlap-items-list::-webkit-scrollbar,
+.enhanced-overlap-ui::-webkit-scrollbar {
+    width: 6px;
+}
+
+.overlap-items-list::-webkit-scrollbar-track,
+.enhanced-overlap-ui::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+}
+
+.overlap-items-list::-webkit-scrollbar-thumb,
+.enhanced-overlap-ui::-webkit-scrollbar-thumb {
+    background: rgba(74, 144, 226, 0.6);
+    border-radius: 3px;
+}
+
+.overlap-items-list::-webkit-scrollbar-thumb:hover,
+.enhanced-overlap-ui::-webkit-scrollbar-thumb:hover {
+    background: rgba(74, 144, 226, 0.8);
+}

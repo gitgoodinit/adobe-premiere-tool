@@ -1,5 +1,118 @@
 /* Enhanced Silence Results UI Styles - Dark Theme */
 
+/* CSS Animations for Enhanced Audio Player */
+@keyframes pulse {
+    0%, 100% { 
+        opacity: 1; 
+        transform: scale(1); 
+    }
+    50% { 
+        opacity: 0.7; 
+        transform: scale(1.1); 
+    }
+}
+
+@keyframes slideIn {
+    from { 
+        opacity: 0; 
+        transform: translateY(20px); 
+    }
+    to { 
+        opacity: 1; 
+        transform: translateY(0); 
+    }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes waveformDraw {
+    from {
+        stroke-dashoffset: 1000;
+    }
+    to {
+        stroke-dashoffset: 0;
+    }
+}
+
+@keyframes buttonHover {
+    from {
+        transform: scale(1);
+    }
+    to {
+        transform: scale(1.05);
+    }
+}
+
+/* Enhanced Audio Player Styles */
+.enhanced-audio-player {
+    animation: slideIn 0.5s ease-out;
+}
+
+.waveform-container {
+    animation: fadeIn 0.8s ease-out;
+}
+
+.pulse {
+    animation: pulse 2s infinite;
+}
+
+/* Progress bar animations */
+.progress-bar {
+    transition: width 0.1s linear;
+}
+
+.progress-handle {
+    transition: transform 0.2s ease;
+}
+
+.progress-handle:hover {
+    transform: scale(1.2);
+}
+
+/* Button hover effects */
+.enhanced-btn {
+    transition: all 0.3s ease;
+}
+
+.enhanced-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 8px 25px rgba(76, 175, 80, 0.5);
+}
+
+/* Waveform animation */
+.waveform-path {
+    stroke-dasharray: 1000;
+    animation: waveformDraw 2s ease-out;
+}
+
+/* Loading spinner for audio processing */
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.loading-spinner {
+    animation: spin 1s linear infinite;
+}
+
+/* Status indicator animations */
+@keyframes statusBlink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0.3; }
+}
+
+.status-processing {
+    animation: statusBlink 1s infinite;
+}
+
+/* Smooth transitions for all interactive elements */
+* {
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
 .enhanced-silence-results {
     background: #1a1a1a;
     border-radius: 12px;
