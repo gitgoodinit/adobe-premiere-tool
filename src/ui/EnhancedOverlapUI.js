@@ -459,17 +459,77 @@ class EnhancedOverlapUI {
         const audioPlayer = this.app.audioPlayer;
         const currentAudioBlob = this.app.currentAudioBlob;
         
-        if (audioPlayer) {
-            document.getElementById('audioFileName').textContent = this.app.currentFileName || 'Current Audio';
-            document.getElementById('audioDuration').textContent = this.formatTime(audioPlayer.duration || 0);
-            document.getElementById('sampleRate').textContent = '48000 Hz'; // Default assumption
-            document.getElementById('audioChannels').textContent = '2 (Stereo)'; // Default assumption
+        // Update file name - check multiple sources
+        const fileName = this.app.currentFileName || 
+                        this.app.currentAudioPath ||
+                        (currentAudioBlob && currentAudioBlob.name) ||
+                        'Current Audio';
+        
+        const fileNameElement = document.getElementById('audioFileName');
+        if (fileNameElement) {
+            fileNameElement.textContent = fileName;
         }
         
-        if (currentAudioBlob) {
-            document.getElementById('audioFormat').textContent = currentAudioBlob.type || 'Unknown';
-            document.getElementById('audioFileSize').textContent = this.formatFileSize(currentAudioBlob.size);
+        // Update duration
+        const durationElement = document.getElementById('audioDuration');
+        if (durationElement) {
+            if (audioPlayer && audioPlayer.duration) {
+                durationElement.textContent = this.formatTime(audioPlayer.duration);
+            } else if (audioPlayer && isNaN(audioPlayer.duration)) {
+                durationElement.textContent = 'Loading...';
+            } else {
+                durationElement.textContent = '0:00';
+            }
         }
+        
+        // Update sample rate
+        const sampleRateElement = document.getElementById('sampleRate');
+        if (sampleRateElement) {
+            sampleRateElement.textContent = '48000 Hz'; // Default assumption for video content
+        }
+        
+        // Update channels
+        const channelsElement = document.getElementById('audioChannels');
+        if (channelsElement) {
+            channelsElement.textContent = '2 (Stereo)'; // Default assumption
+        }
+        
+        // Update format and file size from blob
+        if (currentAudioBlob) {
+            const formatElement = document.getElementById('audioFormat');
+            if (formatElement) {
+                formatElement.textContent = currentAudioBlob.type || 'Unknown';
+            }
+            
+            const fileSizeElement = document.getElementById('audioFileSize');
+            if (fileSizeElement) {
+                fileSizeElement.textContent = this.formatFileSize(currentAudioBlob.size);
+            }
+        } else {
+            // Show loading state or default values
+            const formatElement = document.getElementById('audioFormat');
+            if (formatElement) {
+                formatElement.textContent = 'Loading...';
+            }
+            
+            const fileSizeElement = document.getElementById('audioFileSize');
+            if (fileSizeElement) {
+                fileSizeElement.textContent = '0 KB';
+            }
+        }
+        
+        // Add visual feedback to show panel is updated
+        const audioInfoPanel = document.getElementById('audioInfoPanel');
+        if (audioInfoPanel) {
+            audioInfoPanel.style.display = 'block';
+            // Add a subtle animation to indicate update
+            audioInfoPanel.style.opacity = '0.7';
+            setTimeout(() => {
+                audioInfoPanel.style.opacity = '1';
+            }, 200);
+        }
+        
+        this.app.log('🎵 Audio information panel updated', 'info');
     }
 
     updateQuickStats(overlaps) {

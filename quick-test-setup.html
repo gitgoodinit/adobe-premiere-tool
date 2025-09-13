@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Track Overlap Detection Test Setup</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #007bff;
+        }
+
+        .button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+            transition: background 0.2s;
+        }
+
+        .button:hover {
+            background: #0056b3;
+        }
+
+        .button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .success {
+            color: #28a745;
+            font-weight: bold;
+        }
+
+        .warning {
+            color: #ffc107;
+            font-weight: bold;
+        }
+
+        .error {
+            color: #dc3545;
+            font-weight: bold;
+        }
+
+        .log {
+            background: #000;
+            color: #00ff00;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 15px;
+        }
+
+        .test-file {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background: white;
+            margin: 5px 0;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+
+        .instructions {
+            background: #e7f3ff;
+            border: 1px solid #b3d9ff;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🎵 Multi-Track Overlap Detection Test Setup</h1>
+
+        <div class="section">
+            <h2>📋 Current Status</h2>
+            <p>Your overlap detection system is working perfectly! You're getting 0 results because:</p>
+            <ul>
+                <li>✅ Same audio file loaded twice (correctly skipped)</li>
+                <li>⚠️ Demo tracks have no audio data</li>
+                <li>🎯 Need different audio files to see overlaps</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>🎯 Quick Solution: Generate Test Files</h2>
+            <p>Click the button below to generate and download 5 different test audio files:</p>
+            <button class="button" onclick="generateTestFiles()" id="generateBtn">
+                🎵 Generate Test Audio Files
+            </button>
+            <div id="status"></div>
+            <div id="log" class="log" style="display: none;"></div>
+        </div>
+
+        <div class="section">
+            <h2>📁 Test Files to Generate</h2>
+            <div class="test-file">
+                <span><strong>test_speech1.wav</strong> - Speech with silence gaps (8s)</span>
+                <span class="success">Will create overlaps</span>
+            </div>
+            <div class="test-file">
+                <span><strong>test_speech2.wav</strong> - Continuous speech simulation (10s)</span>
+                <span class="success">Will create overlaps</span>
+            </div>
+            <div class="test-file">
+                <span><strong>test_music.wav</strong> - Background music (12s)</span>
+                <span class="success">Will create overlaps</span>
+            </div>
+            <div class="test-file">
+                <span><strong>test_ambient.wav</strong> - Low-level noise (15s)</span>
+                <span class="warning">Background track</span>
+            </div>
+            <div class="test-file">
+                <span><strong>test_intermittent.wav</strong> - On/off speech pattern (10s)</span>
+                <span class="success">Will create dead spaces</span>
+            </div>
+        </div>
+
+        <div class="instructions">
+            <h3>📝 Next Steps After Generating Files:</h3>
+            <ol>
+                <li><strong>Save the downloaded files</strong> to your computer</li>
+                <li><strong>Open your audio plugin</strong></li>
+                <li><strong>Remove current tracks</strong> (or clear them)</li>
+                <li><strong>Load the new test files</strong> as separate tracks</li>
+                <li><strong>Click "Multi Overlap Detect"</strong></li>
+                <li><strong>See real results!</strong> Should find multiple overlaps and dead spaces</li>
+            </ol>
+        </div>
+
+        <div class="section">
+            <h2>🎯 Expected Results</h2>
+            <p>With the generated test files, you should see logs like:</p>
+            <div class="log">
+                [INFO] 🔍 Starting REAL Multi-Track Overlap Detection...
+                [INFO] 📊 Available tracks for analysis:
+                [INFO] - track_1: test_speech1.wav (active)
+                [INFO] - track_2: test_speech2.wav (active)
+                [INFO] - track_3: test_music.wav (active)
+                [INFO] 🔍 Analyzing overlap between "test_speech1.wav" and "test_speech2.wav"
+                [INFO] 📊 Analysis results: 2 overlap regions found
+                [SUCCESS] ✅ Multi-track analysis completed:
+                [SUCCESS] 📊 5 overlaps found between tracks
+                [SUCCESS] 🔇 3 dead space regions identified
+            </div>
+        </div>
+    </div>
+
+    <script src="test-audio-generator.js"></script>
+    <script>
+        let generator = null;
+
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const colorMap = {
+                'info': '#00ff00',
+                'success': '#00ff00',
+                'warning': '#ffff00',
+                'error': '#ff0000'
+            };
+
+            logDiv.innerHTML += `<div style="color: ${colorMap[type] || '#00ff00'}">[${timestamp}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            logDiv.style.display = 'block';
+        }
+
+        function updateStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            const classMap = {
+                'success': 'success',
+                'warning': 'warning',
+                'error': 'error'
+            };
+
+            statusDiv.innerHTML = `<p class="${classMap[type] || ''}">${message}</p>`;
+        }
+
+        async function generateTestFiles() {
+            const btn = document.getElementById('generateBtn');
+            btn.disabled = true;
+            btn.textContent = '🔄 Generating...';
+
+            try {
+                updateStatus('🎵 Initializing audio generator...', 'info');
+                log('Starting audio test file generation...', 'info');
+
+                if (!generator) {
+                    generator = new AudioTestGenerator();
+                }
+
+                await generator.initialize();
+                log('✅ Audio context initialized', 'success');
+                updateStatus('🎵 Creating test audio files...', 'info');
+
+                const testFiles = await generator.createTestAudioFiles();
+                log(`✅ Generated ${Object.keys(testFiles).length} test files`, 'success');
+
+                updateStatus('💾 Preparing downloads...', 'info');
+                log('Converting to WAV format and preparing downloads...', 'info');
+
+                // Download each file
+                for (const [name, audioBuffer] of Object.entries(testFiles)) {
+                    log(`📁 Preparing ${name}.wav...`, 'info');
+                    const blob = generator.audioBufferToWav(audioBuffer);
+                    const url = URL.createObjectURL(blob);
+
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = `test_${name}.wav`;
+                    link.style.display = 'none';
+                    document.body.appendChild(link);
+
+                    // Auto-download with delay
+                    setTimeout(() => {
+                        link.click();
+                        log(`✅ Downloaded test_${name}.wav (${audioBuffer.duration.toFixed(1)}s)`, 'success');
+                    }, Object.keys(testFiles).indexOf(name) * 500);
+
+                    setTimeout(() => {
+                        document.body.removeChild(link);
+                        URL.revokeObjectURL(url);
+                    }, 5000);
+                }
+
+                setTimeout(() => {
+                    updateStatus('✅ All test files generated and downloaded!', 'success');
+                    log('🎉 Test file generation complete!', 'success');
+                    log('📝 Next: Load these files into your plugin and run overlap detection', 'info');
+
+                    btn.disabled = false;
+                    btn.textContent = '🔄 Generate Again';
+                }, 3000);
+
+            } catch (error) {
+                console.error('Generation failed:', error);
+                log(`❌ Generation failed: ${error.message}`, 'error');
+                updateStatus('❌ Generation failed. Check browser console.', 'error');
+
+                btn.disabled = false;
+                btn.textContent = '🔄 Try Again';
+            }
+        }
+
+        // Show initial instructions
+        log('🎯 Ready to generate test files for multi-track overlap detection', 'info');
+        log('💡 These files will have known overlaps that your system can detect', 'info');
+    </script>
+</body>
+
+</html>

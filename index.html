@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Media Tools Pro</title>
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="enhanced-multitrack-styles.css">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
   <!-- Enhanced UI Styles -->
   <link rel="stylesheet" href="./src/ui/enhanced-silence-results.css">
@@ -574,9 +575,9 @@
               </div>
 
               <div class="test-buttons-grid">
-                <button class="enhanced-test-btn" onclick="window.audioToolsPro.testOpenAIKey()">
-                  <i class="fas fa-key"></i>
-                  <span>Test API</span>
+                <button class="enhanced-test-btn" onclick="window.audioToolsPro.runPreciseTimingTests()">
+                  <i class="fas fa-stopwatch"></i>
+                  <span>Test Precise Timing</span>
                 </button>
                 <button class="enhanced-test-btn" onclick="window.audioToolsPro.testBackgroundNoiseDetection()">
                   <i class="fas fa-robot"></i>
@@ -964,18 +965,18 @@
             </div>
           </div>
 
-          <div class="ai-analysis-options">
-            <label>GPT-4 Conversational Analysis:</label>
-            <div class="ai-checkboxes">
+          <div class="timing-precision-options">
+            <label>Precision Timing Control:</label>
+            <div class="control-group">
               <label class="checkbox-option">
-                <input type="checkbox" id="enableGPTAnalysis">
+                <input type="checkbox" id="enablePreciseTiming" checked>
                 <span class="checkmark"></span>
-                Optimal Cut Point Detection
+                Sample-Accurate Timing (±300ms)
               </label>
               <label class="checkbox-option">
-                <input type="checkbox" id="enableFlowAnalysis">
+                <input type="checkbox" id="enableTimingValidation" checked>
                 <span class="checkmark"></span>
-                Conversational Flow Analysis
+                Timing Accuracy Validation
               </label>
             </div>
           </div>
@@ -999,6 +1000,31 @@
             <p>Analyze rhythm to see timing patterns and correction suggestions</p>
           </div>
         </div>
+
+        <!-- Timing Statistics Panel -->
+        <div class="timing-stats-panel" id="timingStatsPanel" style="display: none;">
+          <h4><i class="fas fa-stopwatch"></i> Precision Timing Statistics</h4>
+          <div id="timingStats" class="timing-stats">
+            <div class="stats-grid">
+              <div class="stat-item">
+                <span class="stat-label">Scheduled Events:</span>
+                <span class="stat-value">0</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Average Error:</span>
+                <span class="stat-value">0.0ms</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Max Error:</span>
+                <span class="stat-value">0.0ms</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Within Tolerance:</span>
+                <span class="stat-value">0/0</span>
+              </div>
+            </div>
+          </div>
+        </div>
       </section>
 
       <!-- Feature 5: Settings Panel -->
@@ -1014,16 +1040,6 @@
           <div class="settings-section">
             <h4><i class="fas fa-key"></i> API Configuration</h4>
             <div class="api-settings">
-              <div class="api-group">
-                <label for="openaiApiKey">OpenAI API Key (Whisper + GPT-4)</label>
-                <div class="api-input-group">
-                  <input type="password" id="openaiApiKey" class="api-input" placeholder="sk-...">
-                  <button class="test-btn" id="testOpenAI">Test</button>
-                </div>
-                <div class="api-status" id="openaiStatus">
-                  <span class="status-badge">Not configured</span>
-                </div>
-              </div>
 
               <div class="api-group">
                 <label for="googleApiKey">Google Cloud API Key (Speech-to-Text)</label>
@@ -1175,12 +1191,20 @@
   <script src="src/core/AIEnhancedSilenceDetector.js"></script>
   <script src="src/ui/AIEnhancedSilenceUI.js"></script>
   <link rel="stylesheet" href="src/ui/ai-enhanced-silence-ui.css">
-  
+
   <!-- Enhanced Overlap Detection System -->
   <script src="src/ui/EnhancedOverlapUI.js"></script>
   <link rel="stylesheet" href="src/ui/enhanced-overlap-ui.css">
 
   <script src="enhanced-ui-browser-integration.js"></script>
+  <script src="openai-rhythm-analysis.js"></script>
+  <script src="real-audio-preview.js"></script>
+  <script src="advanced-time-stretching.js"></script>
+  <script src="precise-timing-scheduler.js"></script>
+  <script src="test-precise-timing.js"></script>
+  <script src="waveform-visualization.js"></script>
+  <script src="rhythm-timing-integration.js"></script>
+  <script src="startup-test.js"></script>
   <script src="index.js"></script>
 </body>
 

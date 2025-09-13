@@ -25,11 +25,14 @@ class AudioToolsPro {
         // Enhanced Overlap UI
         this.enhancedOverlapUI = null;
         
-        // Multi-Track Audio Handling Configuration
+        // REAL Multi-Track Audio Handling Configuration
         this.multiTrackConfig = {
             maxTracks: 6,
             currentTrackCount: 0,
-            tracks: new Map(),
+            tracks: new Map(), // Will store real audio files and buffers
+            loadedFiles: new Map(), // Store actual audio file data
+            audioBuffers: new Map(), // Store decoded audio buffers for analysis
+            trackTypes: new Map(), // Store track types (music, voice, effects)
             submixRouting: {
                 main: { tracks: [], gain: 1.0 },
                 speech: { tracks: [], gain: 1.0 },
@@ -37,6 +40,7 @@ class AudioToolsPro {
                 effects: { tracks: [], gain: 1.0 }
             },
             multicamEnabled: false,
+            realMultiTrackMode: true, // Enable REAL multi-track functionality
             dynamicDuckingEnabled: false,
             processing: false
         };
@@ -56,6 +60,16 @@ class AudioToolsPro {
                 granular: { name: 'Granular Synthesis', quality: 'medium', speed: 'fast' },
                 wsola: { name: 'WSOLA', quality: 'medium', speed: 'very_fast' }
             }
+        };
+        
+        // OpenAI API Configuration
+        this.openaiConfig = {
+            apiKey: '', // Will be set from settings
+            model: 'gpt-4o-mini', // Cost-effective model for audio analysis
+            baseURL: 'https://api.openai.com/v1',
+            maxTokens: 2000,
+            temperature: 0.3, // Lower temperature for more consistent analysis
+            enabled: false
         };
         
                         // Enhanced Audio Overlap Detection Configuration
@@ -296,6 +310,9 @@ class AudioToolsPro {
             // Load audio for processing
             await this.loadAudioFromClip(clip);
             
+            // Store the current file name for Enhanced UI display
+            this.currentFileName = clip.name;
+            
             this.log(`✅ Media loaded successfully: ${clip.name}`, 'success');
             this.showUIMessage(`✅ Loaded: ${clip.name}`, 'success');
             
@@ -346,10 +363,57 @@ class AudioToolsPro {
         }
     }
 
-    // Force UI update and repaint
+    // Force UI update and repaint - ENHANCED
     forceUIUpdate() {
         // Trigger a reflow to ensure all changes are applied
         document.body.offsetHeight;
+        
+        // Additional UI refresh techniques
+        this.forceUIRefresh();
+    }
+    
+    // Enhanced UI refresh method
+    forceUIRefresh() {
+        try {
+            // Force reflow and repaint
+            const container = document.getElementById('multiTrackVisualization');
+            if (container) {
+                container.style.display = 'none';
+                container.offsetHeight; // Trigger reflow
+                container.style.display = '';
+            }
+            
+            // Update any dynamic content
+            this.updateUIElements();
+            
+        } catch (error) {
+            this.log(`⚠️ UI refresh failed: ${error.message}`, 'warning');
+        }
+    }
+    
+    // Update all UI elements
+    updateUIElements() {
+        try {
+            // Update track count displays
+            const trackCountElements = document.querySelectorAll('.track-count, #currentTrackCount');
+            trackCountElements.forEach(element => {
+                if (element) {
+                    element.textContent = this.multiTrackConfig.currentTrackCount;
+                }
+            });
+            
+            // Update status indicators
+            const statusElements = document.querySelectorAll('.tracks-status');
+            statusElements.forEach(element => {
+                if (element) {
+                    const status = this.multiTrackConfig.currentTrackCount > 0 ? 'Ready for processing' : 'No tracks loaded';
+                    element.textContent = status;
+                }
+            });
+            
+        } catch (error) {
+            this.log(`⚠️ UI elements update failed: ${error.message}`, 'warning');
+        }
         
         // Dispatch a custom event to notify other components
         const event = new CustomEvent('mediaLoaded', {
@@ -510,6 +574,23 @@ class AudioToolsPro {
             
             // 5. Clear previous results and show ready state
             this.resetAnalysisResults();
+            
+            // 6. Update Enhanced Overlap UI audio information if available
+            if (this.enhancedOverlapUI && this.enhancedOverlapUI.updateAudioInformation) {
+                try {
+                    // Show the audio info panel
+                    const audioInfoPanel = document.getElementById('audioInfoPanel');
+                    if (audioInfoPanel) {
+                        audioInfoPanel.style.display = 'block';
+                    }
+                    
+                    // Update the audio information
+                    this.enhancedOverlapUI.updateAudioInformation();
+                    this.log('✅ Enhanced Overlap UI audio info updated', 'info');
+                } catch (error) {
+                    this.log(`⚠️ Enhanced Overlap UI update failed: ${error.message}`, 'warning');
+                }
+            }
             
             this.log('✅ Audio visualization updated successfully', 'success');
             
@@ -835,6 +916,11 @@ class AudioToolsPro {
         // Initialize Multi-Track System
         this.initializeMultiTrackSystem();
         
+        // Ensure multi-track interface is shown after a short delay
+        setTimeout(() => {
+            this.showMultiTrackInterface();
+        }, 500);
+        
         // Load saved settings
         this.loadSettings();
         
@@ -997,7 +1083,10 @@ class AudioToolsPro {
         this.attachListener('zoomOut', () => this.zoomTimeline(0.8));
         this.attachListener('zoomReset', () => this.resetTimelineZoom());
         
-        // Feature 3: Multi-Track Audio Handling
+        // Feature 3: REAL Multi-Track Audio Handling
+        this.attachListener('loadMultipleAudioFiles', () => this.loadMultipleAudioFiles());
+        this.attachListener('addAudioTrack', () => this.addNewAudioTrack());
+        this.attachListener('removeAudioTrack', (event) => this.removeAudioTrack(event.detail?.trackId));
         this.attachListener('multiSilenceDetect', () => this.runMultiTrackSilenceDetection());
         this.attachListener('multiAutoTrim', () => this.runMultiTrackAutoTrim());
         this.attachListener('multiOverlapDetect', () => this.runMultiTrackOverlapDetection());
@@ -1012,6 +1101,8 @@ class AudioToolsPro {
         this.attachListener('stretchAlgorithm', () => this.updateStretchAlgorithm());
         this.attachListener('enableGPTAnalysis', () => this.toggleGPTAnalysis());
         this.attachListener('enableFlowAnalysis', () => this.toggleFlowAnalysis());
+        this.attachListener('openaiApiKey', () => this.updateOpenAIApiKey());
+        this.attachListener('testApiKey', () => this.testOpenAIConnection());
         this.attachListener('layerTrimming', () => this.updateResolutionMethod());
         
         // Advanced detection features
@@ -1827,6 +1918,16 @@ class AudioToolsPro {
             // draw waveform for current source if blob is available
             if (this.currentAudioBlob) {
                 this.drawWaveformFromBlob(this.currentAudioBlob);
+            }
+        }
+        
+        // Update Enhanced Overlap UI audio information when metadata loads
+        if (this.enhancedOverlapUI && this.enhancedOverlapUI.updateAudioInformation) {
+            try {
+                this.enhancedOverlapUI.updateAudioInformation();
+                this.log('🎵 Enhanced Overlap UI audio info updated from metadata', 'info');
+            } catch (error) {
+                this.log(`⚠️ Enhanced Overlap UI metadata update failed: ${error.message}`, 'warning');
             }
         }
     }
@@ -16560,21 +16661,1024 @@ AudioToolsPro.prototype.playOverlapSegment = async function(index, useResolved =
     // MULTI-TRACK AUDIO HANDLING
     // ========================================
 
-// Initialize Multi-Track System
+// Initialize REAL Multi-Track System
 AudioToolsPro.prototype.initializeMultiTrackSystem = function() {
-    this.log('🎵 Initializing Multi-Track Audio System...', 'info');
+    this.log('🎵 Initializing REAL Multi-Track Audio System...', 'info');
     
     try {
+        // Clear any existing tracks
+        this.multiTrackConfig.tracks.clear();
+        this.multiTrackConfig.loadedFiles.clear();
+        this.multiTrackConfig.audioBuffers.clear();
+        this.multiTrackConfig.trackTypes.clear();
+        this.multiTrackConfig.currentTrackCount = 0;
+        
         // Initialize track visualization
-        this.updateTrackVisualization();
+        this.updateMultiTrackVisualization();
         
         // Set up initial state
         this.multiTrackConfig.processing = false;
+        this.multiTrackConfig.realMultiTrackMode = true;
         
-        this.log('✅ Multi-Track Audio System initialized', 'success');
+        // Show the multi-track interface
+        this.showMultiTrackInterface();
+        
+        this.log('✅ REAL Multi-Track Audio System initialized', 'success');
         
     } catch (error) {
         this.log(`❌ Multi-Track initialization failed: ${error.message}`, 'error');
+    }
+};
+
+// Load Multiple Audio Files - REAL IMPLEMENTATION
+AudioToolsPro.prototype.loadMultipleAudioFiles = async function() {
+    try {
+        this.log('📁 Opening multiple audio file selector...', 'info');
+        this.showUIMessage('📁 Opening file selector...', 'info');
+        
+        // Create file input for multiple files
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.multiple = true;
+        fileInput.accept = 'audio/*';
+        
+        this.log('📁 File input created, setting up event handlers...', 'info');
+        
+        fileInput.onchange = async (event) => {
+            const files = Array.from(event.target.files);
+            
+            if (files.length === 0) {
+                this.showUIMessage('⚠️ No files selected', 'warning');
+                return;
+            }
+            
+            if (files.length > this.multiTrackConfig.maxTracks) {
+                this.showUIMessage(`⚠️ Maximum ${this.multiTrackConfig.maxTracks} tracks allowed. Only loading first ${this.multiTrackConfig.maxTracks} files.`, 'warning');
+                files.splice(this.multiTrackConfig.maxTracks);
+            }
+            
+            this.showUIMessage(`🎵 Loading ${files.length} audio tracks...`, 'processing');
+            
+            // Load each file
+            let loadedCount = 0;
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                try {
+                    const trackId = `track_${Date.now()}_${i}`;
+                    await this.loadSingleAudioTrack(file, trackId);
+                    loadedCount++;
+                } catch (error) {
+                    this.log(`❌ Failed to load ${file.name}: ${error.message}`, 'error');
+                }
+            }
+            
+            this.showUIMessage(`✅ Loaded ${loadedCount}/${files.length} audio tracks successfully`, 'success');
+            
+            // Force UI update with delay to ensure all tracks are processed
+            setTimeout(() => {
+                this.updateMultiTrackVisualization();
+                this.updateTrackStatistics();
+                this.forceUIRefresh();
+            }, 200);
+        };
+        
+        // Trigger file selection
+        fileInput.click();
+        
+    } catch (error) {
+        this.log(`❌ Failed to open file selector: ${error.message}`, 'error');
+        this.showUIMessage(`❌ Failed to open file selector: ${error.message}`, 'error');
+    }
+};
+
+// Load a single audio track - REAL IMPLEMENTATION
+AudioToolsPro.prototype.loadSingleAudioTrack = async function(file, trackId) {
+    try {
+        this.log(`📊 Loading track: ${file.name}`, 'info');
+        this.showUIMessage(`🎵 Adding track: ${file.name}...`, 'processing');
+        
+        // Initialize audio context if not available
+        if (!this.audioContext) {
+            this.log('🎵 Initializing audio context for multi-track...', 'info');
+            this.initializeAudioContext();
+        }
+        
+        // Validate file
+        if (!file || !file.type.startsWith('audio/')) {
+            throw new Error('Invalid audio file format');
+        }
+        
+        // Create track metadata
+        const trackData = {
+            id: trackId,
+            name: file.name,
+            file: file,
+            size: file.size,
+            type: this.detectTrackType(file.name),
+            duration: 0,
+            sampleRate: 0,
+            channels: 0,
+            loadedAt: Date.now(),
+            active: true,
+            loading: true
+        };
+        
+        // Update UI to show loading state
+        this.updateTrackLoadingState(trackId, 'loading', file.name);
+        
+        try {
+        // Convert file to blob and audio buffer
+        const audioBlob = new Blob([file], { type: file.type });
+        const arrayBuffer = await file.arrayBuffer();
+            
+            // Ensure audio context is in running state
+            if (this.audioContext.state === 'suspended') {
+                await this.audioContext.resume();
+            }
+            
+        const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+        
+        // Update track data with audio info
+        trackData.duration = audioBuffer.duration;
+        trackData.sampleRate = audioBuffer.sampleRate;
+        trackData.channels = audioBuffer.numberOfChannels;
+            trackData.loading = false;
+        
+        // Store everything
+        this.multiTrackConfig.tracks.set(trackId, trackData);
+        this.multiTrackConfig.loadedFiles.set(trackId, audioBlob);
+        this.multiTrackConfig.audioBuffers.set(trackId, audioBuffer);
+        this.multiTrackConfig.trackTypes.set(trackId, trackData.type);
+        this.multiTrackConfig.currentTrackCount++;
+            
+            // Update UI to show success
+            this.updateTrackLoadingState(trackId, 'loaded', file.name);
+        
+        this.log(`✅ Track loaded: ${file.name} (${audioBuffer.duration.toFixed(2)}s, ${audioBuffer.sampleRate}Hz, ${audioBuffer.numberOfChannels}ch)`, 'success');
+        
+        // Update UI to show loaded state
+        this.updateTrackLoadingState(trackId, 'loaded', file.name);
+        
+        return trackData;
+            
+        } catch (decodeError) {
+            // Update UI to show error
+            this.updateTrackLoadingState(trackId, 'error', file.name);
+            throw new Error(`Failed to decode audio: ${decodeError.message}`);
+        }
+        
+    } catch (error) {
+        this.log(`❌ Failed to load track ${file.name}: ${error.message}`, 'error');
+        this.showUIMessage(`❌ Failed to load: ${file.name} - ${error.message}`, 'error');
+        throw error;
+    }
+};
+
+// Update track loading state in UI - ENHANCED
+AudioToolsPro.prototype.updateTrackLoadingState = function(trackId, state, fileName) {
+    try {
+        this.log(`🔄 Updating track loading state: ${trackId} -> ${state}`, 'info');
+        
+        // Always update the full visualization instead of individual elements
+        // This ensures consistency and prevents UI state issues
+        if (state === 'loaded') {
+            // Small delay to ensure track data is fully processed
+            setTimeout(() => {
+                this.updateMultiTrackVisualization();
+                this.showUIMessage(`✅ ${fileName} loaded successfully`, 'success');
+            }, 100);
+        } else if (state === 'error') {
+            this.updateMultiTrackVisualization();
+            this.showUIMessage(`❌ Failed to load ${fileName}`, 'error');
+        } else if (state === 'loading') {
+            this.updateMultiTrackVisualization();
+            this.showUIMessage(`⏳ Loading ${fileName}...`, 'processing');
+        }
+        
+    } catch (error) {
+        this.log(`❌ Failed to update track loading state: ${error.message}`, 'error');
+    }
+};
+
+// Setup track control event listeners
+AudioToolsPro.prototype.setupTrackControls = function(trackElement, trackId) {
+    try {
+        const playBtn = trackElement.querySelector('.play-btn');
+        const muteBtn = trackElement.querySelector('.mute-btn');
+        const removeBtn = trackElement.querySelector('.remove-btn');
+        
+        if (playBtn) {
+            playBtn.addEventListener('click', () => {
+                this.playTrack(trackId);
+            });
+        }
+        
+        if (muteBtn) {
+            muteBtn.addEventListener('click', () => {
+                this.toggleTrackMute(trackId);
+            });
+        }
+        
+        if (removeBtn) {
+            removeBtn.addEventListener('click', () => {
+                this.removeTrack(trackId);
+            });
+        }
+        
+    } catch (error) {
+        this.log(`❌ Failed to setup track controls: ${error.message}`, 'error');
+    }
+};
+
+// Play a specific track
+AudioToolsPro.prototype.playTrack = function(trackId) {
+    try {
+        const audioBuffer = this.multiTrackConfig.audioBuffers.get(trackId);
+        const track = this.multiTrackConfig.tracks.get(trackId);
+        
+        if (!audioBuffer || !track) {
+            this.showUIMessage('❌ Track not found or not loaded', 'error');
+            return;
+        }
+        
+        // Initialize audio context if needed
+        if (!this.audioContext) {
+            this.initializeAudioContext();
+        }
+        
+        // Stop any currently playing track
+        if (this.currentTrackSource) {
+            this.currentTrackSource.stop();
+        }
+        
+        // Create and play audio source
+        const source = this.audioContext.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(this.audioContext.destination);
+        source.start(0);
+        
+        this.currentTrackSource = source;
+        this.showUIMessage(`🎵 Playing: ${track.name}`, 'info');
+        
+        // Update UI to show playing state
+        this.updateTrackPlayState(trackId, true);
+        
+        // Reset play state when finished
+        source.onended = () => {
+            this.updateTrackPlayState(trackId, false);
+            this.currentTrackSource = null;
+        };
+        
+    } catch (error) {
+        this.log(`❌ Failed to play track: ${error.message}`, 'error');
+        this.showUIMessage('❌ Failed to play track', 'error');
+    }
+};
+
+// Toggle track mute state
+AudioToolsPro.prototype.toggleTrackMute = function(trackId) {
+    try {
+        const track = this.multiTrackConfig.tracks.get(trackId);
+        if (!track) return;
+        
+        track.muted = !track.muted;
+        this.updateTrackMuteState(trackId, track.muted);
+        
+        this.log(`${track.muted ? '🔇' : '🔊'} Track ${track.name} ${track.muted ? 'muted' : 'unmuted'}`, 'info');
+        
+    } catch (error) {
+        this.log(`❌ Failed to toggle track mute: ${error.message}`, 'error');
+    }
+};
+
+// Remove a track
+AudioToolsPro.prototype.removeTrack = function(trackId) {
+    try {
+        const track = this.multiTrackConfig.tracks.get(trackId);
+        if (!track) return;
+        
+        // Remove from all storage
+        this.multiTrackConfig.tracks.delete(trackId);
+        this.multiTrackConfig.loadedFiles.delete(trackId);
+        this.multiTrackConfig.audioBuffers.delete(trackId);
+        this.multiTrackConfig.trackTypes.delete(trackId);
+        this.multiTrackConfig.currentTrackCount--;
+        
+        // Remove from UI
+        const trackElement = document.querySelector(`[data-track-id="${trackId}"]`);
+        if (trackElement) {
+            trackElement.remove();
+        }
+        
+        // Update visualization
+        this.updateMultiTrackVisualization();
+        
+        this.log(`🗑️ Removed track: ${track.name}`, 'info');
+        this.showUIMessage(`🗑️ Removed: ${track.name}`, 'info');
+        
+    } catch (error) {
+        this.log(`❌ Failed to remove track: ${error.message}`, 'error');
+    }
+};
+
+// Update track play state in UI
+AudioToolsPro.prototype.updateTrackPlayState = function(trackId, isPlaying) {
+    try {
+        const trackElement = document.querySelector(`[data-track-id="${trackId}"]`);
+        if (!trackElement) return;
+        
+        const playBtn = trackElement.querySelector('.play-btn');
+        if (playBtn) {
+            const icon = playBtn.querySelector('i');
+            if (isPlaying) {
+                icon.className = 'fas fa-pause';
+                playBtn.title = 'Pause Track';
+                trackElement.classList.add('playing');
+            } else {
+                icon.className = 'fas fa-play';
+                playBtn.title = 'Play Track';
+                trackElement.classList.remove('playing');
+            }
+        }
+        
+    } catch (error) {
+        this.log(`❌ Failed to update track play state: ${error.message}`, 'error');
+    }
+};
+
+// Update track mute state in UI
+AudioToolsPro.prototype.updateTrackMuteState = function(trackId, isMuted) {
+    try {
+        const trackElement = document.querySelector(`[data-track-id="${trackId}"]`);
+        if (!trackElement) return;
+        
+        const muteBtn = trackElement.querySelector('.mute-btn');
+        if (muteBtn) {
+            const icon = muteBtn.querySelector('i');
+            if (isMuted) {
+                icon.className = 'fas fa-volume-mute';
+                muteBtn.title = 'Unmute Track';
+                trackElement.classList.add('muted');
+            } else {
+                icon.className = 'fas fa-volume-up';
+                muteBtn.title = 'Mute Track';
+                trackElement.classList.remove('muted');
+            }
+        }
+        
+    } catch (error) {
+        this.log(`❌ Failed to update track mute state: ${error.message}`, 'error');
+    }
+};
+
+// Add a new audio track
+AudioToolsPro.prototype.addNewAudioTrack = async function() {
+    try {
+        this.log('➕ Adding new audio track...', 'info');
+        this.showUIMessage('📁 Select an audio file to add...', 'info');
+        
+        // Check track limit
+        if (this.multiTrackConfig.currentTrackCount >= this.multiTrackConfig.maxTracks) {
+            this.showUIMessage(`❌ Maximum track limit reached (${this.multiTrackConfig.maxTracks} tracks)`, 'error');
+            return;
+        }
+        
+        // Create file input for single file
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = 'audio/*';
+        fileInput.multiple = false;
+        
+        // Handle file selection
+        fileInput.onchange = async (event) => {
+            const file = event.target.files[0];
+            if (!file) {
+                this.showUIMessage('❌ No file selected', 'warning');
+                return;
+            }
+            
+            try {
+                const trackId = `track_${Date.now()}`;
+                await this.loadSingleAudioTrack(file, trackId);
+                
+                // Force UI update after single track load
+                setTimeout(() => {
+                    this.updateMultiTrackVisualization();
+                    this.updateTrackStatistics();
+                    this.forceUIRefresh();
+                }, 100);
+            } catch (error) {
+                this.log(`❌ Failed to add track: ${error.message}`, 'error');
+                this.showUIMessage(`❌ Failed to add track: ${error.message}`, 'error');
+            }
+        };
+        
+        // Trigger file selection
+        fileInput.click();
+        
+    } catch (error) {
+        this.log(`❌ Failed to open file selector: ${error.message}`, 'error');
+        this.showUIMessage(`❌ Failed to open file selector: ${error.message}`, 'error');
+    }
+};
+
+// Update track statistics display
+AudioToolsPro.prototype.updateTrackStatistics = function() {
+    try {
+        // Find or create statistics container
+        let statsContainer = document.getElementById('trackStatistics');
+        if (!statsContainer) {
+            statsContainer = document.createElement('div');
+            statsContainer.id = 'trackStatistics';
+            statsContainer.className = 'track-stats';
+            
+            const multiTrackContainer = document.getElementById('multiTrackVisualization');
+            if (multiTrackContainer && multiTrackContainer.parentNode) {
+                multiTrackContainer.parentNode.insertBefore(statsContainer, multiTrackContainer.nextSibling);
+            }
+        }
+        
+        // Calculate statistics
+        const totalTracks = this.multiTrackConfig.currentTrackCount;
+        let totalDuration = 0;
+        let avgSampleRate = 0;
+        let totalChannels = 0;
+        
+        this.multiTrackConfig.tracks.forEach(track => {
+            totalDuration += track.duration || 0;
+            avgSampleRate += track.sampleRate || 0;
+            totalChannels += track.channels || 0;
+        });
+        
+        avgSampleRate = totalTracks > 0 ? Math.round(avgSampleRate / totalTracks) : 0;
+        
+        // Update statistics display
+        statsContainer.innerHTML = `
+            <div class="stat-item">
+                <div class="stat-value">${totalTracks}</div>
+                <div class="stat-label">Tracks</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">${this.formatTime(totalDuration)}</div>
+                <div class="stat-label">Total Duration</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">${avgSampleRate}Hz</div>
+                <div class="stat-label">Avg Sample Rate</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">${totalChannels}</div>
+                <div class="stat-label">Total Channels</div>
+            </div>
+        `;
+        
+        // Hide if no tracks
+        statsContainer.style.display = totalTracks > 0 ? 'flex' : 'none';
+        
+    } catch (error) {
+        this.log(`❌ Failed to update track statistics: ${error.message}`, 'error');
+    }
+};
+
+// Clear all tracks
+AudioToolsPro.prototype.clearAllTracks = function() {
+    try {
+        if (this.multiTrackConfig.currentTrackCount === 0) {
+            this.showUIMessage('ℹ️ No tracks to clear', 'info');
+            return;
+        }
+        
+        const trackCount = this.multiTrackConfig.currentTrackCount;
+        
+        // Stop any playing tracks
+        if (this.currentTrackSource) {
+            this.currentTrackSource.stop();
+            this.currentTrackSource = null;
+        }
+        
+        // Clear all track data
+        this.multiTrackConfig.tracks.clear();
+        this.multiTrackConfig.loadedFiles.clear();
+        this.multiTrackConfig.audioBuffers.clear();
+        this.multiTrackConfig.trackTypes.clear();
+        this.multiTrackConfig.currentTrackCount = 0;
+        
+        // Update UI
+        this.updateMultiTrackVisualization();
+        this.updateTrackStatistics();
+        
+        this.log(`🗑️ Cleared all ${trackCount} tracks`, 'info');
+        this.showUIMessage(`🗑️ Cleared all ${trackCount} tracks`, 'info');
+        
+    } catch (error) {
+        this.log(`❌ Failed to clear tracks: ${error.message}`, 'error');
+        this.showUIMessage('❌ Failed to clear tracks', 'error');
+    }
+};
+
+// Play all tracks simultaneously
+AudioToolsPro.prototype.playAllTracks = function() {
+    try {
+        if (this.multiTrackConfig.currentTrackCount === 0) {
+            this.showUIMessage('❌ No tracks to play', 'warning');
+            return;
+        }
+        
+        // Initialize audio context if needed
+        if (!this.audioContext) {
+            this.initializeAudioContext();
+        }
+        
+        // Stop any currently playing tracks
+        if (this.currentTrackSources) {
+            this.currentTrackSources.forEach(source => {
+                try { source.stop(); } catch (e) {}
+            });
+        }
+        
+        this.currentTrackSources = [];
+        const startTime = this.audioContext.currentTime;
+        
+        // Create and start all track sources
+        this.multiTrackConfig.audioBuffers.forEach((audioBuffer, trackId) => {
+            const track = this.multiTrackConfig.tracks.get(trackId);
+            if (track && !track.muted) {
+                const source = this.audioContext.createBufferSource();
+                const gainNode = this.audioContext.createGain();
+                
+                source.buffer = audioBuffer;
+                gainNode.gain.value = track.gain || 1.0;
+                
+                source.connect(gainNode);
+                gainNode.connect(this.audioContext.destination);
+                
+                source.start(startTime);
+                this.currentTrackSources.push(source);
+                
+                // Update UI to show playing state
+                this.updateTrackPlayState(trackId, true);
+                
+                // Reset play state when finished
+                source.onended = () => {
+                    this.updateTrackPlayState(trackId, false);
+                };
+            }
+        });
+        
+        this.log(`🎵 Playing ${this.currentTrackSources.length} tracks simultaneously`, 'info');
+        this.showUIMessage(`🎵 Playing ${this.currentTrackSources.length} tracks`, 'info');
+        
+        // Reset all play states when all tracks finish
+        const longestDuration = Math.max(...Array.from(this.multiTrackConfig.tracks.values()).map(t => t.duration || 0));
+        setTimeout(() => {
+            this.currentTrackSources = [];
+        }, longestDuration * 1000);
+        
+    } catch (error) {
+        this.log(`❌ Failed to play all tracks: ${error.message}`, 'error');
+        this.showUIMessage('❌ Failed to play tracks', 'error');
+    }
+};
+
+// Update track limit
+AudioToolsPro.prototype.updateTrackLimit = function(newLimit) {
+    try {
+        const oldLimit = this.multiTrackConfig.maxTracks;
+        this.multiTrackConfig.maxTracks = newLimit;
+        
+        this.log(`📊 Track limit updated: ${oldLimit} → ${newLimit}`, 'info');
+        this.showUIMessage(`📊 Track limit set to ${newLimit}`, 'info');
+        
+        // If current track count exceeds new limit, warn user
+        if (this.multiTrackConfig.currentTrackCount > newLimit) {
+            this.showUIMessage(`⚠️ Current tracks (${this.multiTrackConfig.currentTrackCount}) exceed new limit (${newLimit})`, 'warning');
+        }
+        
+    } catch (error) {
+        this.log(`❌ Failed to update track limit: ${error.message}`, 'error');
+    }
+};
+
+// Remove an audio track
+AudioToolsPro.prototype.removeAudioTrack = function(trackId) {
+    try {
+        if (!trackId || !this.multiTrackConfig.tracks.has(trackId)) {
+            this.showUIMessage('⚠️ Track not found', 'warning');
+            return;
+        }
+        
+        const trackData = this.multiTrackConfig.tracks.get(trackId);
+        this.log(`🗑️ Removing track: ${trackData.name}`, 'info');
+        
+        // Remove from all maps
+        this.multiTrackConfig.tracks.delete(trackId);
+        this.multiTrackConfig.loadedFiles.delete(trackId);
+        this.multiTrackConfig.audioBuffers.delete(trackId);
+        this.multiTrackConfig.trackTypes.delete(trackId);
+        this.multiTrackConfig.currentTrackCount--;
+        
+        this.showUIMessage(`✅ Track removed: ${trackData.name}`, 'success');
+        this.updateMultiTrackVisualization();
+        
+    } catch (error) {
+        this.log(`❌ Failed to remove track: ${error.message}`, 'error');
+    }
+};
+
+// Detect track type from filename
+AudioToolsPro.prototype.detectTrackType = function(filename) {
+    const name = filename.toLowerCase();
+    
+    if (name.includes('music') || name.includes('bgm') || name.includes('background')) {
+        return 'music';
+    } else if (name.includes('voice') || name.includes('speech') || name.includes('vocal') || name.includes('narration')) {
+        return 'voice';
+    } else if (name.includes('sfx') || name.includes('effect') || name.includes('sound')) {
+        return 'effects';
+    } else {
+        return 'unknown';
+    }
+};
+
+// Show multi-track interface
+AudioToolsPro.prototype.showMultiTrackInterface = function() {
+    const multiTrackTab = document.getElementById('feature3');
+    if (multiTrackTab) {
+        // Add real multi-track controls if not already present
+        const existingControls = multiTrackTab.querySelector('.real-multitrack-controls');
+        if (!existingControls) {
+            const controlsHTML = `
+                <div class="real-multitrack-controls">
+                    <div class="multitrack-header">
+                        <h3><i class="fas fa-layer-group"></i> Enhanced Multi-Track Audio System</h3>
+                        <p>Professional multi-track audio loading, processing, and analysis with real-time feedback</p>
+                    </div>
+                    
+                    <div class="multi-track-controls">
+                        <div class="control-group">
+                            <button class="action-btn primary" id="loadMultipleAudioFiles">
+                                <i class="fas fa-upload"></i> Load Multiple Files
+                            </button>
+                            <button class="action-btn secondary" id="addAudioTrack">
+                                <i class="fas fa-plus"></i> Add Single Track
+                            </button>
+                        </div>
+                        
+                        <div class="control-group">
+                            <button class="action-btn" id="clearAllTracks">
+                                <i class="fas fa-trash"></i> Clear All
+                            </button>
+                            <button class="action-btn" id="playAllTracks">
+                                <i class="fas fa-play-circle"></i> Play All
+                            </button>
+                        </div>
+                        
+                        <div class="control-group">
+                            <label for="trackLimit">Max Tracks:</label>
+                            <select id="trackLimit">
+                                <option value="3">3 Tracks</option>
+                                <option value="6" selected>6 Tracks</option>
+                                <option value="12">12 Tracks</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="tracks-visualization" id="multiTrackVisualization">
+                        <div class="no-tracks-message">
+                            <i class="fas fa-music"></i>
+                            <p>No tracks loaded</p>
+                            <span>Load multiple audio files to get started with professional multi-track processing</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            multiTrackTab.insertAdjacentHTML('afterbegin', controlsHTML);
+            
+            // FIXED: Manually attach event listeners to the dynamically created buttons
+            this.attachMultiTrackEventListeners();
+        }
+    }
+};
+
+// Attach event listeners to multi-track buttons
+AudioToolsPro.prototype.attachMultiTrackEventListeners = function() {
+    try {
+        this.log('🔗 Attaching multi-track event listeners...', 'info');
+        
+        // Load Multiple Audio Files button
+        const loadMultipleBtn = document.getElementById('loadMultipleAudioFiles');
+        if (loadMultipleBtn) {
+            loadMultipleBtn.addEventListener('click', () => {
+                this.log('📁 Load Multiple Audio Files button clicked', 'info');
+                this.loadMultipleAudioFiles();
+            });
+            this.log('✅ Load Multiple Audio Files button listener attached', 'info');
+        } else {
+            this.log('⚠️ Load Multiple Audio Files button not found', 'warning');
+        }
+        
+        // Add Single Track button
+        const addTrackBtn = document.getElementById('addAudioTrack');
+        if (addTrackBtn) {
+            addTrackBtn.addEventListener('click', () => {
+                this.log('➕ Add Audio Track button clicked', 'info');
+                this.addNewAudioTrack();
+            });
+            this.log('✅ Add Audio Track button listener attached', 'info');
+        } else {
+            this.log('⚠️ Add Audio Track button not found', 'warning');
+        }
+        
+        // Clear All Tracks button
+        const clearAllBtn = document.getElementById('clearAllTracks');
+        if (clearAllBtn) {
+            clearAllBtn.addEventListener('click', () => {
+                this.clearAllTracks();
+            });
+            this.log('✅ Clear All Tracks button listener attached', 'info');
+        }
+        
+        // Play All Tracks button
+        const playAllBtn = document.getElementById('playAllTracks');
+        if (playAllBtn) {
+            playAllBtn.addEventListener('click', () => {
+                this.playAllTracks();
+            });
+            this.log('✅ Play All Tracks button listener attached', 'info');
+        }
+        
+        // Track Limit selector
+        const trackLimitSelect = document.getElementById('trackLimit');
+        if (trackLimitSelect) {
+            trackLimitSelect.addEventListener('change', (e) => {
+                this.updateTrackLimit(parseInt(e.target.value));
+            });
+            this.log('✅ Track Limit selector listener attached', 'info');
+        }
+        
+        this.log('✅ Multi-track event listeners attached successfully', 'success');
+        
+    } catch (error) {
+        this.log(`❌ Failed to attach multi-track event listeners: ${error.message}`, 'error');
+    }
+};
+
+// Update multi-track visualization - ENHANCED IMPLEMENTATION
+AudioToolsPro.prototype.updateMultiTrackVisualization = function() {
+    try {
+        const container = document.getElementById('multiTrackVisualization');
+        if (!container) {
+            this.log('⚠️ Multi-track visualization container not found', 'warning');
+            return;
+        }
+        
+        const trackCount = this.multiTrackConfig.currentTrackCount;
+        
+        // Clear existing content first
+        container.innerHTML = '';
+        
+        if (trackCount === 0) {
+            container.innerHTML = `
+                <div class="no-tracks-message">
+                    <i class="fas fa-music"></i>
+                    <p>No tracks loaded</p>
+                    <span>Load multiple audio files to get started with professional multi-track processing</span>
+                    <div class="quick-actions">
+                        <button class="action-btn primary" onclick="audioToolsPro.loadMultipleAudioFiles()">
+                            <i class="fas fa-upload"></i> Load Audio Files
+                        </button>
+                    </div>
+                </div>
+            `;
+            this.updateTrackStatistics();
+            return;
+        }
+        
+        // Create header with track count and controls
+        const headerHTML = `
+            <div class="tracks-header">
+                <div class="tracks-info">
+                    <h4><i class="fas fa-layer-group"></i> Active Tracks (${trackCount}/${this.multiTrackConfig.maxTracks})</h4>
+                    <span class="tracks-status">Ready for processing</span>
+                </div>
+                <div class="tracks-actions">
+                    <button class="action-btn secondary" onclick="audioToolsPro.addNewAudioTrack()">
+                        <i class="fas fa-plus"></i> Add Track
+                    </button>
+                    <button class="action-btn danger" onclick="audioToolsPro.clearAllTracks()">
+                        <i class="fas fa-trash"></i> Clear All
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        // Generate tracks display
+        const tracksHTML = Array.from(this.multiTrackConfig.tracks.entries()).map(([trackId, track]) => {
+            const typeIcon = this.getTrackTypeIcon(track.type);
+            const typeColor = this.getTrackTypeColor(track.type);
+            const statusClass = track.active ? 'active' : 'inactive';
+            const loadingClass = track.loading ? 'loading' : 'loaded';
+            
+            return `
+                <div class="track-item ${statusClass} ${loadingClass}" data-track-id="${trackId}">
+                    <div class="track-header">
+                        <div class="track-info">
+                            <div class="track-icon" style="color: ${typeColor};">
+                                ${track.loading ? '<div class="loading-spinner"></div>' : typeIcon}
+                            </div>
+                            <div class="track-details">
+                                <div class="track-name" title="${track.name}">${track.name}</div>
+                                <div class="track-status">
+                                    ${track.loading ? 'Loading...' : 
+                                      `${track.duration ? track.duration.toFixed(2) + 's' : ''} • 
+                                       ${track.sampleRate ? track.sampleRate + 'Hz' : ''} • 
+                                       ${track.channels ? track.channels + 'ch' : ''} • 
+                                       ${(track.size / 1024 / 1024).toFixed(1)}MB`}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="track-controls">
+                            ${!track.loading ? `
+                                <button class="control-btn play-btn" onclick="audioToolsPro.previewTrack('${trackId}')" title="Preview Track">
+                                    <i class="fas fa-play"></i>
+                                </button>
+                                <button class="control-btn mute-btn ${track.muted ? 'muted' : ''}" onclick="audioToolsPro.toggleTrackMute('${trackId}')" title="${track.muted ? 'Unmute' : 'Mute'} Track">
+                                    <i class="fas fa-volume-${track.muted ? 'mute' : 'up'}"></i>
+                                </button>
+                                <button class="control-btn active-btn ${track.active ? 'active' : ''}" onclick="audioToolsPro.toggleTrackActive('${trackId}')" title="${track.active ? 'Deactivate' : 'Activate'} Track">
+                                    <i class="fas fa-${track.active ? 'eye' : 'eye-slash'}"></i>
+                                </button>
+                                <button class="control-btn remove-btn" onclick="audioToolsPro.removeAudioTrack('${trackId}')" title="Remove Track">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            ` : `
+                                <div class="loading-indicator">
+                                    <div class="loading-dots"></div>
+                                </div>
+                            `}
+                        </div>
+                    </div>
+                    ${!track.loading ? `
+                        <div class="track-waveform">
+                            <div class="waveform-placeholder" id="waveform-${trackId}">
+                                <div class="waveform-bars">
+                                    ${Array.from({length: 50}, (_, i) => `<div class="bar" style="height: ${Math.random() * 100}%"></div>`).join('')}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="track-progress">
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: 0%"></div>
+                            </div>
+                            <div class="time-display">0:00 / ${this.formatTime(track.duration || 0)}</div>
+                        </div>
+                    ` : `
+                        <div class="track-loading">
+                            <div class="loading-progress">
+                                <div class="progress-bar">
+                                    <div class="progress-fill loading-animation"></div>
+                                </div>
+                                <span class="loading-text">Processing audio data...</span>
+                            </div>
+                        </div>
+                    `}
+                </div>
+            `;
+        }).join('');
+        
+        // Combine header and tracks
+        container.innerHTML = headerHTML + '<div class="tracks-list">' + tracksHTML + '</div>';
+        
+        // Update statistics
+        this.updateTrackStatistics();
+        
+        // Force UI refresh
+        setTimeout(() => {
+            this.forceUIRefresh();
+        }, 100);
+        
+        this.log(`✅ Multi-track visualization updated: ${trackCount} tracks displayed`, 'info');
+        
+    } catch (error) {
+        this.log(`❌ Failed to update multi-track visualization: ${error.message}`, 'error');
+        console.error('Multi-track visualization error:', error);
+    }
+};
+
+// Attach event listeners to analysis buttons
+AudioToolsPro.prototype.attachAnalysisButtonListeners = function() {
+    try {
+        // Multi Overlap Detect button
+        const overlapDetectBtn = document.getElementById('multiOverlapDetect');
+        if (overlapDetectBtn && !overlapDetectBtn.disabled) {
+            overlapDetectBtn.addEventListener('click', () => {
+                this.log('🔍 Multi Overlap Detect button clicked', 'info');
+                this.runMultiTrackOverlapDetection();
+            });
+        }
+        
+        // Multi Silence Detect button
+        const silenceDetectBtn = document.getElementById('multiSilenceDetect');
+        if (silenceDetectBtn && !silenceDetectBtn.disabled) {
+            silenceDetectBtn.addEventListener('click', () => {
+                this.log('🔇 Multi Silence Detect button clicked', 'info');
+                this.runMultiTrackSilenceDetection();
+            });
+        }
+        
+        // Multi Auto Trim button
+        const autoTrimBtn = document.getElementById('multiAutoTrim');
+        if (autoTrimBtn && !autoTrimBtn.disabled) {
+            autoTrimBtn.addEventListener('click', () => {
+                this.log('✂️ Multi Auto Trim button clicked', 'info');
+                this.runMultiTrackAutoTrim();
+            });
+        }
+        
+    } catch (error) {
+        this.log(`❌ Failed to attach analysis button listeners: ${error.message}`, 'error');
+    }
+};
+
+// Get track type icon
+AudioToolsPro.prototype.getTrackTypeIcon = function(type) {
+    const icons = {
+        music: 'fa-music',
+        voice: 'fa-microphone',
+        effects: 'fa-volume-up',
+        unknown: 'fa-file-audio'
+    };
+    return icons[type] || icons.unknown;
+};
+
+// Get track type color
+AudioToolsPro.prototype.getTrackTypeColor = function(type) {
+    const colors = {
+        music: '#FF6B6B',
+        voice: '#4ECDC4',
+        effects: '#45B7D1',
+        unknown: '#96CEB4'
+    };
+    return colors[type] || colors.unknown;
+};
+
+// Get track count by type
+AudioToolsPro.prototype.getTrackCountByType = function(type) {
+    return Array.from(this.multiTrackConfig.trackTypes.values()).filter(t => t === type).length;
+};
+
+// Preview a single track
+AudioToolsPro.prototype.previewTrack = async function(trackId) {
+    try {
+        const trackData = this.multiTrackConfig.tracks.get(trackId);
+        const audioBlob = this.multiTrackConfig.loadedFiles.get(trackId);
+        
+        if (!trackData || !audioBlob) {
+            this.showUIMessage('⚠️ Track data not found', 'warning');
+            return;
+        }
+        
+        this.log(`🎵 Previewing track: ${trackData.name}`, 'info');
+        
+        // Create temporary audio element for preview
+        const audio = new Audio(URL.createObjectURL(audioBlob));
+        audio.volume = 0.5;
+        
+        await audio.play();
+        
+        // Stop after 10 seconds or when track ends
+        setTimeout(() => {
+            if (!audio.paused) {
+                audio.pause();
+            }
+            URL.revokeObjectURL(audio.src);
+        }, Math.min(10000, trackData.duration * 1000));
+        
+        this.showUIMessage(`🎵 Previewing: ${trackData.name}`, 'info');
+        
+    } catch (error) {
+        this.log(`❌ Failed to preview track: ${error.message}`, 'error');
+        this.showUIMessage(`❌ Preview failed: ${error.message}`, 'error');
+    }
+};
+
+// Toggle track active state
+AudioToolsPro.prototype.toggleTrack = function(trackId) {
+    try {
+        const trackData = this.multiTrackConfig.tracks.get(trackId);
+        if (!trackData) {
+            this.showUIMessage('⚠️ Track not found', 'warning');
+            return;
+        }
+        
+        trackData.active = !trackData.active;
+        this.log(`🔄 Track ${trackData.name} ${trackData.active ? 'activated' : 'deactivated'}`, 'info');
+        
+        this.updateMultiTrackVisualization();
+        
+    } catch (error) {
+        this.log(`❌ Failed to toggle track: ${error.message}`, 'error');
     }
 };
 
@@ -16666,44 +17770,541 @@ AudioToolsPro.prototype.runMultiTrackAutoTrim = async function() {
     }
 };
 
-// Multi-Track Overlap Detection
+// Multi-Track Overlap Detection - REAL IMPLEMENTATION
 AudioToolsPro.prototype.runMultiTrackOverlapDetection = async function() {
     try {
-        this.log('🔍 Starting Multi-Track Overlap Detection...', 'info');
-        this.showUIMessage('🔍 Detecting overlaps between tracks...', 'processing');
+        this.log('🔍 Starting REAL Multi-Track Overlap Detection...', 'info');
+        this.showUIMessage('🔍 Analyzing audio overlaps between multiple tracks...', 'processing');
         
         if (this.multiTrackConfig.currentTrackCount < 2) {
-            this.showUIMessage('❌ Need at least 2 tracks for overlap detection.', 'error');
+            this.showUIMessage('❌ Need at least 2 tracks for overlap detection. Please load multiple audio files.', 'error');
             return;
         }
         
+        // Debug: Log all available tracks
+        this.log('📊 Available tracks for analysis:', 'info');
+        this.multiTrackConfig.tracks.forEach((track, trackId) => {
+            this.log(`   - ${trackId}: ${track.name} (${track.active ? 'active' : 'inactive'})`, 'info');
+        });
+        
         const overlaps = [];
+        const deadSpaces = [];
         const activeTracks = Array.from(this.multiTrackConfig.tracks.values()).filter(track => track.active);
         
-        // Compare each pair of tracks
-        for (let i = 0; i < activeTracks.length; i++) {
-            for (let j = i + 1; j < activeTracks.length; j++) {
-                const track1 = activeTracks[i];
-                const track2 = activeTracks[j];
-                
-                this.log(`🔍 Comparing ${track1.name} vs ${track2.name}`, 'info');
-                
-                const trackOverlaps = await this.detectOverlapsBetweenTracks(track1, track2);
-                overlaps.push(...trackOverlaps);
+        this.log(`🎵 Analyzing ${activeTracks.length} active tracks for overlaps and dead space`, 'info');
+        
+        // Step 1: Load and analyze each track's audio data
+        const trackAudioData = new Map();
+        for (const track of activeTracks) {
+            this.log(`📊 Loading audio data for track: ${track.name}`, 'info');
+            const audioBuffer = await this.loadTrackAudioBuffer(track);
+            if (audioBuffer) {
+                trackAudioData.set(track.id, {
+                    track: track,
+                    buffer: audioBuffer,
+                    duration: audioBuffer.duration,
+                    sampleRate: audioBuffer.sampleRate,
+                    channelData: audioBuffer.getChannelData(0) // Get first channel
+                });
             }
         }
         
-        this.log(`✅ Multi-track overlap detection completed: ${overlaps.length} overlaps found`, 'success');
-        this.showUIMessage(`✅ Found ${overlaps.length} overlaps between tracks`, 'success');
+        if (trackAudioData.size < 2) {
+            this.showUIMessage('❌ Could not load audio data from tracks. Please ensure audio files are loaded.', 'error');
+            return;
+        }
         
-        // Display results
-        this.displayMultiTrackOverlapResults(overlaps);
+        // Step 2: Compare each pair of tracks for REAL overlaps
+        const trackPairs = [];
+        const trackArray = Array.from(trackAudioData.values());
         
-        return overlaps;
+        for (let i = 0; i < trackArray.length; i++) {
+            for (let j = i + 1; j < trackArray.length; j++) {
+                const track1Data = trackArray[i];
+                const track2Data = trackArray[j];
+                
+                // Additional safety check to prevent same track comparison
+                if (track1Data.track.id === track2Data.track.id || 
+                    track1Data.track.name === track2Data.track.name) {
+                    this.log(`⚠️ Skipping self-comparison of track: ${track1Data.track.name}`, 'warning');
+                    continue;
+                }
+                
+                this.log(`🔍 Analyzing overlap between "${track1Data.track.name}" and "${track2Data.track.name}"`, 'info');
+                
+                try {
+                const pairOverlaps = await this.detectRealOverlapsBetweenTracks(track1Data, track2Data);
+                    
+                    // Ensure pairOverlaps has the expected structure
+                    if (pairOverlaps && typeof pairOverlaps === 'object') {
+                        const overlapArray = Array.isArray(pairOverlaps.overlaps) ? pairOverlaps.overlaps : [];
+                        const deadSpaceArray = Array.isArray(pairOverlaps.deadSpaces) ? pairOverlaps.deadSpaces : [];
+                        
+                        overlaps.push(...overlapArray);
+                        deadSpaces.push(...deadSpaceArray);
+                
+                trackPairs.push({
+                    track1: track1Data.track.name,
+                    track2: track2Data.track.name,
+                            overlaps: overlapArray.length,
+                            deadSpaces: deadSpaceArray.length
+                        });
+                        
+                        this.log(`📊 Analysis results for ${track1Data.track.name} vs ${track2Data.track.name}:`, 'info');
+                        this.log(`   🔄 ${overlapArray.length} overlap regions found`, 'info');
+                        this.log(`   🔇 ${deadSpaceArray.length} dead space regions found`, 'info');
+                    } else {
+                        this.log(`⚠️ Invalid analysis result for ${track1Data.track.name} vs ${track2Data.track.name}`, 'warning');
+                    }
+                } catch (pairError) {
+                    this.log(`❌ Failed to analyze ${track1Data.track.name} vs ${track2Data.track.name}: ${pairError.message}`, 'error');
+                }
+            }
+        }
+        
+        // Step 3: Detect dead space across all tracks
+        this.log('🔍 Detecting dead space across all tracks...', 'info');
+        try {
+        const globalDeadSpaces = await this.detectGlobalDeadSpace(trackAudioData);
+            if (Array.isArray(globalDeadSpaces)) {
+        deadSpaces.push(...globalDeadSpaces);
+                this.log(`🔇 Found ${globalDeadSpaces.length} global dead space regions`, 'info');
+            } else {
+                this.log('⚠️ Global dead space detection returned invalid format', 'warning');
+            }
+        } catch (deadSpaceError) {
+            this.log(`❌ Global dead space detection failed: ${deadSpaceError.message}`, 'error');
+        }
+        
+        const totalOverlaps = overlaps.length;
+        const totalDeadSpaces = deadSpaces.length;
+        
+        this.log(`✅ Multi-track analysis completed:`, 'success');
+        this.log(`   📊 ${totalOverlaps} overlaps found between tracks`, 'success');
+        this.log(`   🔇 ${totalDeadSpaces} dead space regions identified`, 'success');
+        
+        // Step 4: Display comprehensive results
+        const results = {
+            overlaps: overlaps,
+            deadSpaces: deadSpaces,
+            trackPairs: trackPairs,
+            totalTracks: activeTracks.length,
+            analysisTime: Date.now()
+        };
+        
+        this.displayMultiTrackOverlapResults(results);
+        this.lastMultiTrackResults = results;
+        
+        this.showUIMessage(`✅ Found ${totalOverlaps} overlaps and ${totalDeadSpaces} dead spaces across ${activeTracks.length} tracks`, 'success');
+        
+        return results;
         
     } catch (error) {
         this.log(`❌ Multi-track overlap detection failed: ${error.message}`, 'error');
         this.showUIMessage(`❌ Overlap detection failed: ${error.message}`, 'error');
+    }
+};
+
+// Load audio buffer for a specific track - UPDATED FOR REAL MULTI-TRACK
+AudioToolsPro.prototype.loadTrackAudioBuffer = async function(track) {
+    try {
+        // For real multi-track mode, use the stored audio buffer directly
+        if (this.multiTrackConfig.realMultiTrackMode && track.id) {
+            const audioBuffer = this.multiTrackConfig.audioBuffers.get(track.id);
+            if (audioBuffer) {
+                this.log(`✅ Using cached audio buffer for track ${track.name}: ${audioBuffer.duration.toFixed(2)}s`, 'info');
+                return audioBuffer;
+            }
+        }
+        
+        // Fallback to old method for backward compatibility
+        if (!track.audioFile && !track.audioBlob && !track.filePath) {
+            this.log(`⚠️ No audio data found for track: ${track.name}`, 'warning');
+            return null;
+        }
+        
+        let audioBlob = track.audioBlob;
+        
+        // If we have a file path, try to load it
+        if (!audioBlob && track.filePath) {
+            // In a real implementation, this would load from the file system
+            // For now, use the main audio player's audio if available
+            if (this.currentAudioBlob) {
+                audioBlob = this.currentAudioBlob;
+            }
+        }
+        
+        if (!audioBlob) {
+            this.log(`⚠️ Could not load audio data for track: ${track.name}`, 'warning');
+            return null;
+        }
+        
+        // Convert blob to audio buffer
+        const arrayBuffer = await audioBlob.arrayBuffer();
+        const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+        
+        this.log(`✅ Loaded audio buffer for track ${track.name}: ${audioBuffer.duration.toFixed(2)}s`, 'info');
+        return audioBuffer;
+        
+    } catch (error) {
+        this.log(`❌ Failed to load audio buffer for track ${track.name}: ${error.message}`, 'error');
+        return null;
+    }
+};
+
+// Detect real overlaps between two tracks using audio analysis
+AudioToolsPro.prototype.detectRealOverlapsBetweenTracks = async function(track1Data, track2Data) {
+    const overlaps = [];
+    const deadSpaces = [];
+    
+    try {
+        this.log(`🔍 Performing real-time analysis between ${track1Data.track.name} and ${track2Data.track.name}`, 'info');
+        
+        const sampleRate = Math.min(track1Data.sampleRate, track2Data.sampleRate);
+        const duration = Math.min(track1Data.duration, track2Data.duration);
+        
+        // Analysis parameters
+        const windowSize = 0.1; // 100ms windows
+        const overlapThreshold = 0.02; // 2% energy threshold for "active" audio
+        const silenceThreshold = 0.001; // Threshold for silence detection
+        
+        const totalWindows = Math.floor(duration / windowSize);
+        
+        for (let i = 0; i < totalWindows; i++) {
+            const startTime = i * windowSize;
+            const endTime = Math.min(startTime + windowSize, duration);
+            
+            // Get audio energy for this window in both tracks
+            const track1Energy = this.calculateAudioEnergyInWindow(track1Data.channelData, startTime, endTime, sampleRate);
+            const track2Energy = this.calculateAudioEnergyInWindow(track2Data.channelData, startTime, endTime, sampleRate);
+            
+            // Check for overlap (both tracks have significant audio)
+            if (track1Energy > overlapThreshold && track2Energy > overlapThreshold) {
+                // This is a real overlap - both tracks are playing simultaneously
+                const overlapSeverity = Math.min(track1Energy, track2Energy) / Math.max(track1Energy, track2Energy);
+                
+                overlaps.push({
+                    startTime: startTime,
+                    endTime: endTime,
+                    duration: endTime - startTime,
+                    track1: track1Data.track.name,
+                    track2: track2Data.track.name,
+                    track1Energy: track1Energy,
+                    track2Energy: track2Energy,
+                    severity: overlapSeverity,
+                    type: 'simultaneous_playback',
+                    confidence: 0.9
+                });
+            }
+            
+            // Check for dead space (both tracks are silent)
+            else if (track1Energy < silenceThreshold && track2Energy < silenceThreshold) {
+                deadSpaces.push({
+                    startTime: startTime,
+                    endTime: endTime,
+                    duration: endTime - startTime,
+                    type: 'dead_space',
+                    tracks: [track1Data.track.name, track2Data.track.name]
+                });
+            }
+        }
+        
+        // Merge consecutive overlaps and dead spaces
+        const mergedOverlaps = this.mergeConsecutiveRegions(overlaps, 0.2); // Merge if within 200ms
+        const mergedDeadSpaces = this.mergeConsecutiveRegions(deadSpaces, 0.5); // Merge if within 500ms
+        
+        this.log(`📊 Analysis results for ${track1Data.track.name} vs ${track2Data.track.name}:`, 'info');
+        this.log(`   🔄 ${mergedOverlaps.length} overlap regions found`, 'info');
+        this.log(`   🔇 ${mergedDeadSpaces.length} dead space regions found`, 'info');
+        
+        return {
+            overlaps: mergedOverlaps,
+            deadSpaces: mergedDeadSpaces
+        };
+        
+    } catch (error) {
+        this.log(`❌ Failed to analyze tracks ${track1Data.track.name} vs ${track2Data.track.name}: ${error.message}`, 'error');
+        return { overlaps: [], deadSpaces: [] };
+    }
+};
+
+// Calculate audio energy in a specific time window
+AudioToolsPro.prototype.calculateAudioEnergyInWindow = function(channelData, startTime, endTime, sampleRate) {
+    const startSample = Math.floor(startTime * sampleRate);
+    const endSample = Math.floor(endTime * sampleRate);
+    
+    let totalEnergy = 0;
+    let sampleCount = 0;
+    
+    for (let i = startSample; i < Math.min(endSample, channelData.length); i++) {
+        totalEnergy += channelData[i] * channelData[i]; // RMS calculation
+        sampleCount++;
+    }
+    
+    return sampleCount > 0 ? Math.sqrt(totalEnergy / sampleCount) : 0;
+};
+
+// Detect global dead space across all tracks
+AudioToolsPro.prototype.detectGlobalDeadSpace = async function(trackAudioData) {
+    const deadSpaces = [];
+    
+    try {
+        this.log('🔍 Analyzing global dead space across all tracks...', 'info');
+        
+        if (trackAudioData.size === 0) return deadSpaces;
+        
+        // Find the minimum duration across all tracks
+        const trackArray = Array.from(trackAudioData.values());
+        const minDuration = Math.min(...trackArray.map(track => track.duration));
+        
+        const windowSize = 0.5; // 500ms windows for dead space detection
+        const silenceThreshold = 0.001;
+        const totalWindows = Math.floor(minDuration / windowSize);
+        
+        for (let i = 0; i < totalWindows; i++) {
+            const startTime = i * windowSize;
+            const endTime = Math.min(startTime + windowSize, minDuration);
+            
+            let allTracksQuiet = true;
+            const trackEnergies = [];
+            
+            // Check if ALL tracks are quiet in this window
+            for (const trackData of trackArray) {
+                const energy = this.calculateAudioEnergyInWindow(trackData.channelData, startTime, endTime, trackData.sampleRate);
+                trackEnergies.push({ track: trackData.track.name, energy });
+                
+                if (energy > silenceThreshold) {
+                    allTracksQuiet = false;
+                }
+            }
+            
+            if (allTracksQuiet) {
+                deadSpaces.push({
+                    startTime: startTime,
+                    endTime: endTime,
+                    duration: endTime - startTime,
+                    type: 'global_dead_space',
+                    tracks: trackArray.map(t => t.track.name),
+                    trackEnergies: trackEnergies
+                });
+            }
+        }
+        
+        // Merge consecutive dead spaces
+        const mergedDeadSpaces = this.mergeConsecutiveRegions(deadSpaces, 1.0); // Merge if within 1 second
+        
+        this.log(`🔇 Found ${mergedDeadSpaces.length} global dead space regions`, 'info');
+        return mergedDeadSpaces;
+        
+    } catch (error) {
+        this.log(`❌ Failed to detect global dead space: ${error.message}`, 'error');
+        return deadSpaces;
+    }
+};
+
+// Merge consecutive regions (overlaps or dead spaces)
+AudioToolsPro.prototype.mergeConsecutiveRegions = function(regions, maxGap) {
+    if (regions.length === 0) return regions;
+    
+    // Sort by start time
+    regions.sort((a, b) => a.startTime - b.startTime);
+    
+    const merged = [];
+    let currentRegion = { ...regions[0] };
+    
+    for (let i = 1; i < regions.length; i++) {
+        const nextRegion = regions[i];
+        
+        // If the gap between regions is small enough, merge them
+        if (nextRegion.startTime - currentRegion.endTime <= maxGap) {
+            currentRegion.endTime = Math.max(currentRegion.endTime, nextRegion.endTime);
+            currentRegion.duration = currentRegion.endTime - currentRegion.startTime;
+            
+            // Merge additional properties if they exist
+            if (nextRegion.severity && currentRegion.severity) {
+                currentRegion.severity = Math.max(currentRegion.severity, nextRegion.severity);
+            }
+        } else {
+            // Gap is too large, finalize current region and start a new one
+            merged.push(currentRegion);
+            currentRegion = { ...nextRegion };
+        }
+    }
+    
+    // Add the last region
+    merged.push(currentRegion);
+    
+    return merged;
+};
+
+// Display multi-track overlap results
+AudioToolsPro.prototype.displayMultiTrackOverlapResults = function(results) {
+    try {
+        this.log('🎨 Displaying multi-track overlap results...', 'info');
+        
+        const resultsContainer = document.getElementById('multiTrackResults') || document.getElementById('overlapResults');
+        if (!resultsContainer) {
+            this.log('❌ No results container found for multi-track display', 'error');
+            return;
+        }
+        
+        const { overlaps, deadSpaces, trackPairs, totalTracks } = results;
+        
+        const resultsHTML = `
+            <div class="multi-track-results">
+                <div class="results-header">
+                    <h3><i class="fas fa-layer-group"></i> Multi-Track Analysis Results</h3>
+                    <div class="analysis-summary">
+                        <span class="summary-item">
+                            <i class="fas fa-music"></i>
+                            <strong>${totalTracks}</strong> Tracks Analyzed
+                        </span>
+                        <span class="summary-item">
+                            <i class="fas fa-exchange-alt"></i>
+                            <strong>${overlaps.length}</strong> Overlaps Found
+                        </span>
+                        <span class="summary-item">
+                            <i class="fas fa-volume-mute"></i>
+                            <strong>${deadSpaces.length}</strong> Dead Spaces
+                        </span>
+                    </div>
+                </div>
+                
+                <!-- Track Pairs Analysis -->
+                <div class="track-pairs-section">
+                    <h4><i class="fas fa-code-branch"></i> Track Pair Analysis</h4>
+                    <div class="track-pairs-grid">
+                        ${trackPairs.map(pair => `
+                            <div class="track-pair-card">
+                                <div class="pair-header">
+                                    <strong>${pair.track1}</strong> vs <strong>${pair.track2}</strong>
+                                </div>
+                                <div class="pair-stats">
+                                    <span class="stat"><i class="fas fa-exchange-alt"></i> ${pair.overlaps} overlaps</span>
+                                    <span class="stat"><i class="fas fa-volume-mute"></i> ${pair.deadSpaces} dead spaces</span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                
+                <!-- Overlaps Section -->
+                ${overlaps.length > 0 ? `
+                    <div class="overlaps-section">
+                        <h4><i class="fas fa-exchange-alt"></i> Detected Overlaps (${overlaps.length})</h4>
+                        <div class="overlaps-list">
+                            ${overlaps.map((overlap, index) => `
+                                <div class="overlap-item multi-track-overlap" data-index="${index}">
+                                    <div class="overlap-header">
+                                        <div class="overlap-info">
+                                            <strong>Overlap ${index + 1}</strong>
+                                            <span class="overlap-time">${this.formatTime(overlap.startTime)} - ${this.formatTime(overlap.endTime)}</span>
+                                            <span class="overlap-duration">(${overlap.duration.toFixed(2)}s)</span>
+                                        </div>
+                                        <div class="overlap-severity">
+                                            <span class="severity-label">Severity:</span>
+                                            <div class="severity-bar">
+                                                <div class="severity-fill" style="width: ${(overlap.severity * 100).toFixed(1)}%"></div>
+                                            </div>
+                                            <span class="severity-text">${(overlap.severity * 100).toFixed(1)}%</span>
+                                        </div>
+                                    </div>
+                                    <div class="overlap-details">
+                                        <div class="track-details">
+                                            <div class="track-detail">
+                                                <i class="fas fa-music"></i>
+                                                <strong>${overlap.track1}</strong>
+                                                <span class="energy-level">Energy: ${(overlap.track1Energy * 100).toFixed(1)}%</span>
+                                            </div>
+                                            <div class="track-detail">
+                                                <i class="fas fa-microphone"></i>
+                                                <strong>${overlap.track2}</strong>
+                                                <span class="energy-level">Energy: ${(overlap.track2Energy * 100).toFixed(1)}%</span>
+                                            </div>
+                                        </div>
+                                        <div class="overlap-actions">
+                                            <button class="action-btn secondary" onclick="window.audioToolsPro.playMultiTrackOverlap(${index})">
+                                                <i class="fas fa-play"></i> Play Overlap
+                                            </button>
+                                            <button class="action-btn primary" onclick="window.audioToolsPro.resolveMultiTrackOverlap(${index})">
+                                                <i class="fas fa-magic"></i> Auto-Duck
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+                
+                <!-- Dead Spaces Section -->
+                ${deadSpaces.length > 0 ? `
+                    <div class="deadspaces-section">
+                        <h4><i class="fas fa-volume-mute"></i> Dead Spaces (${deadSpaces.length})</h4>
+                        <div class="deadspaces-list">
+                            ${deadSpaces.map((deadSpace, index) => `
+                                <div class="deadspace-item" data-index="${index}">
+                                    <div class="deadspace-header">
+                                        <div class="deadspace-info">
+                                            <strong>Dead Space ${index + 1}</strong>
+                                            <span class="deadspace-time">${this.formatTime(deadSpace.startTime)} - ${this.formatTime(deadSpace.endTime)}</span>
+                                            <span class="deadspace-duration">(${deadSpace.duration.toFixed(2)}s)</span>
+                                        </div>
+                                        <div class="deadspace-type">
+                                            <span class="type-badge ${deadSpace.type}">${deadSpace.type.replace('_', ' ')}</span>
+                                        </div>
+                                    </div>
+                                    <div class="deadspace-details">
+                                        <div class="affected-tracks">
+                                            <strong>Affected Tracks:</strong>
+                                            ${deadSpace.tracks.map(track => `<span class="track-tag">${track}</span>`).join('')}
+                                        </div>
+                                        <div class="deadspace-actions">
+                                            <button class="action-btn secondary" onclick="window.audioToolsPro.previewDeadSpace(${index})">
+                                                <i class="fas fa-eye"></i> Preview
+                                            </button>
+                                            <button class="action-btn primary" onclick="window.audioToolsPro.trimDeadSpace(${index})">
+                                                <i class="fas fa-cut"></i> Trim Out
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+                
+                <!-- Actions Section -->
+                <div class="multi-track-actions">
+                    <div class="action-group">
+                        <h4>Bulk Actions</h4>
+                        <button class="action-btn primary large" onclick="window.audioToolsPro.resolveAllMultiTrackOverlaps()">
+                            <i class="fas fa-magic"></i> Auto-Resolve All Overlaps
+                        </button>
+                        <button class="action-btn secondary large" onclick="window.audioToolsPro.trimAllDeadSpaces()">
+                            <i class="fas fa-cut"></i> Trim All Dead Spaces
+                        </button>
+                    </div>
+                    <div class="action-group">
+                        <h4>Export Options</h4>
+                        <button class="action-btn secondary" onclick="window.audioToolsPro.exportMultiTrackResults()">
+                            <i class="fas fa-download"></i> Export Results
+                        </button>
+                        <button class="action-btn secondary" onclick="window.audioToolsPro.generateMultiTrackReport()">
+                            <i class="fas fa-file-alt"></i> Generate Report
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        resultsContainer.innerHTML = resultsHTML;
+        resultsContainer.style.display = 'block';
+        
+        this.log(`✅ Multi-track results displayed: ${overlaps.length} overlaps, ${deadSpaces.length} dead spaces`, 'success');
+        
+    } catch (error) {
+        this.log(`❌ Failed to display multi-track results: ${error.message}`, 'error');
     }
 };
 
@@ -17568,35 +19169,326 @@ AudioToolsPro.prototype.displayMultiTrackSilenceResults = function(results) {
 };
 
 // Display multi-track overlap results
-AudioToolsPro.prototype.displayMultiTrackOverlapResults = function(overlaps) {
+AudioToolsPro.prototype.displayMultiTrackOverlapResults = function(results) {
     const container = document.getElementById('tracksContainer');
     if (!container) return;
     
-    let html = '<div class="multi-track-results">';
-    html += '<h5>🔍 Multi-Track Overlap Results</h5>';
+    // Handle both array input (legacy) and results object input
+    let overlaps, deadSpaces, trackPairs, totalTracks;
     
+    if (Array.isArray(results)) {
+        // Legacy array format
+        overlaps = results;
+        deadSpaces = [];
+        trackPairs = [];
+        totalTracks = 0;
+    } else if (results && typeof results === 'object') {
+        // New results object format
+        overlaps = results.overlaps || [];
+        deadSpaces = results.deadSpaces || [];
+        trackPairs = results.trackPairs || [];
+        totalTracks = results.totalTracks || 0;
+    } else {
+        this.log('❌ Invalid results format for displayMultiTrackOverlapResults', 'error');
+        return;
+    }
+    
+    let html = '<div class="multi-track-results">';
+    html += '<h5>🔍 Multi-Track Analysis Results</h5>';
+    
+    // Summary section
+    html += `
+        <div class="analysis-summary">
+            <div class="summary-stats">
+                <div class="stat-item">
+                    <span class="stat-value">${totalTracks}</span>
+                    <span class="stat-label">Tracks Analyzed</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value">${overlaps.length}</span>
+                    <span class="stat-label">Overlaps Found</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value">${deadSpaces.length}</span>
+                    <span class="stat-label">Dead Spaces</span>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Overlaps section
     if (overlaps.length === 0) {
         html += '<div class="no-overlaps">✅ No overlaps detected between tracks</div>';
     } else {
-        overlaps.forEach(overlap => {
+        html += '<div class="overlaps-section">';
+        html += '<h6>📊 Detected Overlaps</h6>';
+        
+        overlaps.forEach((overlap, index) => {
             html += `
-                <div class="overlap-result">
+                <div class="overlap-result" data-overlap-id="${index}">
                     <div class="overlap-header">
-                        <span class="overlap-tracks">${overlap.track1.name} ↔ ${overlap.track2.name}</span>
-                        <span class="overlap-severity">Severity: ${(overlap.severity * 100).toFixed(0)}%</span>
+                        <span class="overlap-tracks">${overlap.track1?.name || 'Track 1'} ↔ ${overlap.track2?.name || 'Track 2'}</span>
+                        <span class="overlap-severity">Severity: ${((overlap.severity || 0) * 100).toFixed(0)}%</span>
                     </div>
                     <div class="overlap-details">
-                        <span class="overlap-time">${this.formatTime(overlap.start)} - ${this.formatTime(overlap.end)}</span>
-                        <span class="overlap-duration">${overlap.duration.toFixed(1)}s</span>
-                        <span class="overlap-confidence">${(overlap.confidence * 100).toFixed(0)}% confidence</span>
+                        <span class="overlap-time">${this.formatTime(overlap.startTime || overlap.start || 0)} - ${this.formatTime(overlap.endTime || overlap.end || 0)}</span>
+                        <span class="overlap-duration">${(overlap.duration || 0).toFixed(1)}s</span>
+                        <span class="overlap-confidence">${((overlap.confidence || 0) * 100).toFixed(0)}% confidence</span>
+                        <span class="overlap-type">${overlap.type || 'Unknown'}</span>
+                    </div>
+                    <div class="overlap-actions">
+                        <button class="action-btn small" onclick="window.audioToolsPro.playOverlapSegment(${index})">
+                            <i class="fas fa-play"></i> Play
+                        </button>
+                        <button class="action-btn small" onclick="window.audioToolsPro.highlightOverlap(${index})">
+                            <i class="fas fa-search"></i> Locate
+                        </button>
                     </div>
                 </div>
             `;
         });
+        
+        html += '</div>';
+    }
+    
+    // Dead spaces section
+    if (deadSpaces.length > 0) {
+        html += '<div class="dead-spaces-section">';
+        html += '<h6>🔇 Dead Space Regions</h6>';
+        
+        deadSpaces.forEach((deadSpace, index) => {
+            html += `
+                <div class="dead-space-result" data-deadspace-id="${index}">
+                    <div class="dead-space-header">
+                        <span class="dead-space-tracks">${deadSpace.tracks?.join(', ') || 'All Tracks'}</span>
+                        <span class="dead-space-duration">${(deadSpace.duration || 0).toFixed(1)}s silence</span>
+                    </div>
+                    <div class="dead-space-details">
+                        <span class="dead-space-time">${this.formatTime(deadSpace.startTime || deadSpace.start || 0)} - ${this.formatTime(deadSpace.endTime || deadSpace.end || 0)}</span>
+                        <span class="dead-space-confidence">${((deadSpace.confidence || 0) * 100).toFixed(0)}% confidence</span>
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += '</div>';
+    }
+    
+    // Track pairs summary
+    if (trackPairs.length > 0) {
+        html += '<div class="track-pairs-section">';
+        html += '<h6>🔗 Track Pair Analysis</h6>';
+        
+        trackPairs.forEach(pair => {
+            html += `
+                <div class="track-pair-result">
+                    <span class="pair-tracks">${pair.track1} ↔ ${pair.track2}</span>
+                    <span class="pair-overlaps">${pair.overlaps} overlaps</span>
+                    <span class="pair-deadspaces">${pair.deadSpaces} dead spaces</span>
+                </div>
+            `;
+        });
+        
+        html += '</div>';
     }
     
     html += '</div>';
     container.innerHTML = html;
+    
+    this.log(`✅ Displayed results: ${overlaps.length} overlaps, ${deadSpaces.length} dead spaces`, 'info');
+};
+
+// Play overlap segment
+AudioToolsPro.prototype.playOverlapSegment = function(overlapIndex) {
+    try {
+        if (!this.lastMultiTrackResults || !this.lastMultiTrackResults.overlaps) {
+            this.showUIMessage('❌ No overlap data available', 'error');
+            return;
+        }
+        
+        const overlap = this.lastMultiTrackResults.overlaps[overlapIndex];
+        if (!overlap) {
+            this.showUIMessage('❌ Overlap not found', 'error');
+            return;
+        }
+        
+        const startTime = overlap.startTime || overlap.start || 0;
+        const endTime = overlap.endTime || overlap.end || startTime + (overlap.duration || 1);
+        
+        this.log(`🎵 Playing overlap segment ${overlapIndex + 1}: ${this.formatTime(startTime)} - ${this.formatTime(endTime)}`, 'info');
+        this.showUIMessage(`🎵 Playing overlap segment ${overlapIndex + 1}`, 'info');
+        
+        // For now, just show the time range - in a full implementation, 
+        // this would play the specific audio segment
+        
+    } catch (error) {
+        this.log(`❌ Failed to play overlap segment: ${error.message}`, 'error');
+        this.showUIMessage('❌ Failed to play segment', 'error');
+    }
+};
+
+// Highlight overlap in visualization
+AudioToolsPro.prototype.highlightOverlap = function(overlapIndex) {
+    try {
+        if (!this.lastMultiTrackResults || !this.lastMultiTrackResults.overlaps) {
+            this.showUIMessage('❌ No overlap data available', 'error');
+            return;
+        }
+        
+        const overlap = this.lastMultiTrackResults.overlaps[overlapIndex];
+        if (!overlap) {
+            this.showUIMessage('❌ Overlap not found', 'error');
+            return;
+        }
+        
+        // Highlight the overlap in the results
+        const overlapElement = document.querySelector(`[data-overlap-id="${overlapIndex}"]`);
+        if (overlapElement) {
+            // Remove previous highlights
+            document.querySelectorAll('.overlap-result.highlighted').forEach(el => {
+                el.classList.remove('highlighted');
+            });
+            
+            // Add highlight to current overlap
+            overlapElement.classList.add('highlighted');
+            overlapElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            
+            const startTime = overlap.startTime || overlap.start || 0;
+            this.showUIMessage(`🔍 Highlighted overlap at ${this.formatTime(startTime)}`, 'info');
+            
+            // Remove highlight after 3 seconds
+            setTimeout(() => {
+                overlapElement.classList.remove('highlighted');
+            }, 3000);
+        }
+        
+    } catch (error) {
+        this.log(`❌ Failed to highlight overlap: ${error.message}`, 'error');
+    }
+};
+
+// Detect global dead space across all tracks
+AudioToolsPro.prototype.detectGlobalDeadSpace = async function(trackAudioData) {
+    const deadSpaces = [];
+    
+    try {
+        this.log('🔍 Analyzing global dead space across all tracks...', 'info');
+        
+        if (trackAudioData.size === 0) {
+            return deadSpaces;
+        }
+        
+        // Find the longest track duration for analysis
+        let maxDuration = 0;
+        let minSampleRate = Infinity;
+        
+        trackAudioData.forEach(trackData => {
+            maxDuration = Math.max(maxDuration, trackData.duration);
+            minSampleRate = Math.min(minSampleRate, trackData.sampleRate);
+        });
+        
+        // Analysis parameters
+        const windowSize = 0.1; // 100ms windows
+        const silenceThreshold = 0.001; // Very low threshold for silence
+        const minDeadSpaceDuration = 0.5; // Minimum 500ms for dead space
+        
+        const totalWindows = Math.floor(maxDuration / windowSize);
+        const silentWindows = [];
+        
+        // Analyze each time window across all tracks
+        for (let i = 0; i < totalWindows; i++) {
+            const startTime = i * windowSize;
+            const endTime = Math.min(startTime + windowSize, maxDuration);
+            
+            let isGlobalSilence = true;
+            
+            // Check if all tracks are silent in this window
+            for (const [trackId, trackData] of trackAudioData) {
+                if (startTime >= trackData.duration) {
+                    // Track has ended, consider as silence
+                    continue;
+                }
+                
+                const startSample = Math.floor(startTime * trackData.sampleRate);
+                const endSample = Math.min(Math.floor(endTime * trackData.sampleRate), trackData.channelData.length);
+                
+                // Calculate RMS energy for this window
+                let energy = 0;
+                const sampleCount = endSample - startSample;
+                
+                if (sampleCount > 0) {
+                    for (let s = startSample; s < endSample; s++) {
+                        energy += trackData.channelData[s] * trackData.channelData[s];
+                    }
+                    energy = Math.sqrt(energy / sampleCount);
+                }
+                
+                // If any track has significant energy, this window is not silent
+                if (energy > silenceThreshold) {
+                    isGlobalSilence = false;
+                    break;
+                }
+            }
+            
+            silentWindows.push({
+                startTime,
+                endTime,
+                isSilent: isGlobalSilence
+            });
+        }
+        
+        // Merge consecutive silent windows into dead space regions
+        let currentDeadSpace = null;
+        
+        for (const window of silentWindows) {
+            if (window.isSilent) {
+                if (!currentDeadSpace) {
+                    currentDeadSpace = {
+                        startTime: window.startTime,
+                        endTime: window.endTime,
+                        tracks: Array.from(trackAudioData.keys())
+                    };
+                } else {
+                    currentDeadSpace.endTime = window.endTime;
+                }
+            } else {
+                if (currentDeadSpace) {
+                    const duration = currentDeadSpace.endTime - currentDeadSpace.startTime;
+                    if (duration >= minDeadSpaceDuration) {
+                        deadSpaces.push({
+                            ...currentDeadSpace,
+                            duration,
+                            confidence: 0.9,
+                            type: 'global_silence',
+                            description: `Global silence across all ${trackAudioData.size} tracks`
+                        });
+                    }
+                    currentDeadSpace = null;
+                }
+            }
+        }
+        
+        // Handle final dead space if it extends to the end
+        if (currentDeadSpace) {
+            const duration = currentDeadSpace.endTime - currentDeadSpace.startTime;
+            if (duration >= minDeadSpaceDuration) {
+                deadSpaces.push({
+                    ...currentDeadSpace,
+                    duration,
+                    confidence: 0.9,
+                    type: 'global_silence',
+                    description: `Global silence across all ${trackAudioData.size} tracks`
+                });
+            }
+        }
+        
+        this.log(`🔇 Found ${deadSpaces.length} global dead space regions`, 'info');
+        return deadSpaces;
+        
+    } catch (error) {
+        this.log(`❌ Global dead space detection failed: ${error.message}`, 'error');
+        return [];
+    }
 };
 
 // Update track visualization
@@ -17988,6 +19880,72 @@ AudioToolsPro.prototype.toggleFlowAnalysis = function() {
         } else {
             this.log('🔄 Conversational flow analysis disabled', 'info');
         }
+    }
+};
+
+// Update OpenAI API Key
+AudioToolsPro.prototype.updateOpenAIApiKey = function() {
+    const input = document.getElementById('openaiApiKey');
+    
+    if (input) {
+        const apiKey = input.value.trim();
+        this.openaiConfig.apiKey = apiKey;
+        this.openaiConfig.enabled = apiKey.length > 0;
+        
+        // Save to settings
+        this.settings.openaiApiKey = apiKey;
+        this.saveSettings();
+        
+        if (apiKey.length > 0) {
+            this.log('🤖 OpenAI API key updated', 'info');
+        } else {
+            this.log('🤖 OpenAI API key cleared', 'info');
+        }
+    }
+};
+
+// Test OpenAI Connection
+AudioToolsPro.prototype.testOpenAIConnection = async function() {
+    const button = document.getElementById('testApiKey');
+    const apiKey = this.openaiConfig.apiKey;
+    
+    if (!apiKey || apiKey.length < 10) {
+        this.showUIMessage('❌ Please enter a valid OpenAI API key first', 'error');
+        return;
+    }
+    
+    try {
+        button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
+        button.disabled = true;
+        
+        this.log('🧪 Testing OpenAI API connection...', 'info');
+        
+        const response = await fetch(`${this.openaiConfig.baseURL}/models`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            const hasGPT4 = data.data.some(model => model.id.includes('gpt-4'));
+            
+            this.openaiConfig.enabled = true;
+            this.log('✅ OpenAI API connection successful', 'success');
+            this.showUIMessage(`✅ API connection successful! ${hasGPT4 ? 'GPT-4 available' : 'Using available models'}`, 'success');
+        } else {
+            throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+        }
+        
+    } catch (error) {
+        this.openaiConfig.enabled = false;
+        this.log(`❌ OpenAI API test failed: ${error.message}`, 'error');
+        this.showUIMessage(`❌ API test failed: ${error.message}`, 'error');
+    } finally {
+        button.innerHTML = '<i class="fas fa-check"></i> Test';
+        button.disabled = false;
     }
 };
 
@@ -18831,8 +20789,14 @@ AudioToolsPro.prototype.analyzeRhythm = async function(audioBuffer) {
         let suggestedCorrections = this.generateCorrectionsFromAnalysis(analysisResults);
         
         // Apply GPT-4 analysis if enabled
-        if (this.rhythmTimingConfig.enableGPTAnalysis) {
-            suggestedCorrections = await this.performGPTAnalysis(analysisResults, suggestedCorrections);
+        if (this.rhythmTimingConfig.enableGPTAnalysis && this.openaiConfig.enabled) {
+            try {
+                this.log('🤖 Performing OpenAI GPT analysis on timing patterns...', 'info');
+                suggestedCorrections = await this.performOpenAIRhythmAnalysis(analysisResults, suggestedCorrections);
+                this.log('✅ OpenAI analysis completed successfully', 'success');
+            } catch (error) {
+                this.log(`⚠️ OpenAI analysis failed, using local analysis: ${error.message}`, 'warning');
+            }
         }
         
         // Return in the required format
