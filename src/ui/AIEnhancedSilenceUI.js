@@ -130,7 +130,7 @@ class AIEnhancedSilenceUI {
                         </div>
                         
                         <div class="secondary-actions">
-                            <button class="action-btn secondary" id="loadMedia">
+                            <button class="action-btn secondary" id="loadMediaBtn">
                                 <i class="fas fa-folder-open"></i>
                                 <span>Load Media</span>
                             </button>

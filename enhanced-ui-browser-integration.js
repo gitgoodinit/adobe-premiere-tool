@@ -282,30 +282,16 @@
             } else if (e.target.id === 'exportResults') {
                 exportResults();
             } else if (e.target.id === 'detectOverlaps') {
-                // Call the real overlap detection function from the main app
-                if (window.audioToolsPro && window.audioToolsPro.detectAudioOverlaps) {
-                    window.audioToolsPro.detectAudioOverlaps();
-                } else {
-                    console.error('Real overlap detection function not available');
-                }
+                // Let the main app handle this - avoid duplicate event handling
+                console.log('🔍 Overlap detection button clicked - handled by main app');
             }
         });
     }
     
     function setupAudioOverlapDetection() {
-        // Override the detectOverlaps button functionality to call the real function
-        const detectOverlapsBtn = document.getElementById('detectOverlaps');
-        if (detectOverlapsBtn) {
-            detectOverlapsBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                // Call the real overlap detection function from the main app
-                if (window.audioToolsPro && window.audioToolsPro.detectAudioOverlaps) {
-                    window.audioToolsPro.detectAudioOverlaps();
-                } else {
-                    console.error('Real overlap detection function not available');
-                }
-            });
-        }
+        // Note: The main app handles detectOverlaps button events
+        // We don't add duplicate event handlers here to avoid conflicts
+        console.log('✅ Audio Overlap Detection UI ready - using main app event handlers');
     }
     
     function addToggleButton() {
@@ -1023,6 +1009,39 @@
                 font-size: 13px;
                 margin: 0;
                 line-height: 1.4;
+            }
+        
+            .timeline-conflict-marker {
+                position: absolute;
+                height: 100%;
+                cursor: pointer;
+                border: 1px solid rgba(255, 255, 255, 0.3);
+                border-radius: 2px;
+                transition: all 0.2s ease;
+                z-index: 10;
+            }
+            
+            .timeline-conflict-marker:hover {
+                opacity: 0.9;
+                transform: scaleY(1.1);
+                border-color: rgba(255, 255, 255, 0.8);
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            }
+            
+            .overlap-item.highlighted {
+                background: rgba(0, 188, 212, 0.2) !important;
+                border: 2px solid #00bcd4 !important;
+                transform: scale(1.02);
+                box-shadow: 0 4px 15px rgba(0, 188, 212, 0.3);
+            }
+            
+            .enhanced-action-btn.resolved {
+                background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%) !important;
+                border-color: #4CAF50 !important;
+            }
+            
+            .enhanced-action-btn.resolved:hover {
+                background: linear-gradient(135deg, #45a049 0%, #3d8b40 100%) !important;
             }
         `;
         document.head.appendChild(style);
