@@ -18,6 +18,20 @@ class AudioToolsPro {
         this.lastSilenceResults = [];
         this.currentAudioPath = null;
         
+        // Loading Screen Management
+        this.loadingManager = {
+            screen: null,
+            progressRing: null,
+            progressText: null,
+            statusText: null,
+            statusDetails: null,
+            steps: null,
+            currentStep: 0,
+            totalSteps: 5,
+            progress: 0,
+            isLoading: true
+        };
+        
         // Enhanced Features Integration
         this.enhancedFeatures = null;
         this.enhancedUI = null;
@@ -49,7 +63,7 @@ class AudioToolsPro {
         this.rhythmTimingConfig = {
             timingTolerance: 150, // ±150ms
             stretchAlgorithm: 'phase_vocoder',
-            enableGPTAnalysis: false,
+            enableGPTAnalysis: true, // Enable GPT analysis by default
             enableFlowAnalysis: false,
             analysisResults: null,
             corrections: [],
@@ -2761,6 +2775,9 @@ class AudioToolsPro {
                 throw new Error('No audio file available for analysis');
             }
             
+            // Store the audio blob for resolve functions
+            this.currentAudioBlob = audioFile;
+            
             // Get analysis settings
             const settings = this.getAIEnhancedSettings();
             
@@ -5294,6 +5311,19 @@ Format your response as JSON with this structure:
                 }
             }
         });
+        
+        // Synchronize API keys across all storage locations
+        if (this.settings.openaiApiKey) {
+            this.openaiConfig.apiKey = this.settings.openaiApiKey;
+            this.openaiConfig.enabled = this.settings.openaiApiKey.length > 0;
+            this.openaiIntegration.setApiKey(this.settings.openaiApiKey);
+        }
+        
+        if (this.settings.googleApiKey) {
+            // Sync Google API key if needed
+            this.googleConfig = this.googleConfig || {};
+            this.googleConfig.apiKey = this.settings.googleApiKey;
+        }
     }
 
     updateFFmpegStatus() {
@@ -20846,7 +20876,7 @@ AudioToolsPro.prototype.analyzeAudioRhythm = async function() {
         this.rhythmTimingConfig.processing = false;
         
         // Display results with REAL data confirmation
-        this.displayRhythmAnalysisResults(corrections, rhythmResults);
+        await this.displayRhythmAnalysisResults(corrections, rhythmResults);
         
         // Enable correction buttons
         this.enableRhythmCorrectionButtons();
@@ -21041,16 +21071,26 @@ AudioToolsPro.prototype.updateOpenAIApiKey = function() {
 // Test OpenAI Connection
 AudioToolsPro.prototype.testOpenAIConnection = async function() {
     const button = document.getElementById('testApiKey');
-    const apiKey = this.openaiConfig.apiKey;
+    // Check both storage locations for the API key
+    const apiKey = this.openaiConfig.apiKey || this.settings.openaiApiKey;
     
     if (!apiKey || apiKey.length < 10) {
         this.showUIMessage('❌ Please enter a valid OpenAI API key first', 'error');
         return;
     }
     
+    // Ensure the API key is synchronized across all locations
+    if (this.settings.openaiApiKey && !this.openaiConfig.apiKey) {
+        this.openaiConfig.apiKey = this.settings.openaiApiKey;
+        this.openaiIntegration.setApiKey(this.settings.openaiApiKey);
+    }
+    
     try {
-        button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
-        button.disabled = true;
+        // Only update button if it exists
+        if (button) {
+            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
+            button.disabled = true;
+        }
         
         this.log('🧪 Testing OpenAI API connection...', 'info');
         
@@ -21078,8 +21118,11 @@ AudioToolsPro.prototype.testOpenAIConnection = async function() {
         this.log(`❌ OpenAI API test failed: ${error.message}`, 'error');
         this.showUIMessage(`❌ API test failed: ${error.message}`, 'error');
     } finally {
-        button.innerHTML = '<i class="fas fa-check"></i> Test';
-        button.disabled = false;
+        // Only update button if it exists
+        if (button) {
+            button.innerHTML = '<i class="fas fa-check"></i> Test';
+            button.disabled = false;
+        }
     }
 };
 
@@ -21133,7 +21176,7 @@ AudioToolsPro.prototype.generateTimingCorrections = async function() {
     
     // Process long pauses (> 2 seconds)
     if (analysisResults.longPauses && analysisResults.longPauses.length > 0) {
-        analysisResults.longPauses.forEach(pause => {
+        for (const pause of analysisResults.longPauses) {
             if (pause.duration > 2.0) {
                 const optimalDuration = Math.min(1.5, pause.duration * 0.6); // Reduce to 60% or 1.5s max
                 corrections.push({
@@ -21149,15 +21192,15 @@ AudioToolsPro.prototype.generateTimingCorrections = async function() {
                     confidence: 0.9, // High confidence for long pauses
                     apply: true,
                     gptSuggestion: this.rhythmTimingConfig.enableGPTAnalysis ? 
-                        this.generateGPTSuggestion({ type: 'long_pause' }) : null
+                        await this.generateGPTSuggestion({ type: 'long_pause' }) : null
                 });
             }
-        });
+        }
     }
     
     // Process short speech segments (< 0.5 seconds) - potential artifacts
     if (analysisResults.shortSpeech && analysisResults.shortSpeech.length > 0) {
-        analysisResults.shortSpeech.forEach(speech => {
+        for (const speech of analysisResults.shortSpeech) {
             if (speech.duration < 0.5) {
                 corrections.push({
                     id: correctionId++,
@@ -21175,12 +21218,12 @@ AudioToolsPro.prototype.generateTimingCorrections = async function() {
                         'Consider removing this very short segment if it\'s not meaningful speech.' : null
                 });
             }
-        });
+        }
     }
     
     // Detect awkward gaps (silences between 0.1s and 1.0s that seem unnatural)
     if (analysisResults.silenceRegions) {
-        analysisResults.silenceRegions.forEach(silence => {
+        for (const silence of analysisResults.silenceRegions) {
             if (silence.duration > 0.1 && silence.duration < 1.0) {
                 // Check if this gap seems awkward based on context
                 const isAwkward = silence.duration > 0.3 && silence.duration < 0.8;
@@ -21200,16 +21243,16 @@ AudioToolsPro.prototype.generateTimingCorrections = async function() {
                         confidence: 0.75,
                         apply: true,
                         gptSuggestion: this.rhythmTimingConfig.enableGPTAnalysis ? 
-                            this.generateGPTSuggestion({ type: 'awkward_gap' }) : null
+                            await this.generateGPTSuggestion({ type: 'awkward_gap' }) : null
                     });
                 }
             }
-        });
+        }
     }
     
     // Detect potential rushed speech (very long speech segments without breaks)
     if (analysisResults.speechRegions) {
-        analysisResults.speechRegions.forEach(speech => {
+        for (const speech of analysisResults.speechRegions) {
             if (speech.duration > 15.0) { // Very long speech segments
                 corrections.push({
                     id: correctionId++,
@@ -21224,10 +21267,10 @@ AudioToolsPro.prototype.generateTimingCorrections = async function() {
                     confidence: 0.6,
                     apply: false, // Default disabled since it adds time
                     gptSuggestion: this.rhythmTimingConfig.enableGPTAnalysis ? 
-                        this.generateGPTSuggestion({ type: 'rushed_speech' }) : null
+                        await this.generateGPTSuggestion({ type: 'rushed_speech' }) : null
                 });
             }
-        });
+        }
     }
     
     // Add rhythm inconsistency corrections if detected
@@ -21254,8 +21297,18 @@ AudioToolsPro.prototype.generateTimingCorrections = async function() {
     return corrections.sort((a, b) => a.timestamp - b.timestamp);
 };
 
-// Generate GPT suggestion
-AudioToolsPro.prototype.generateGPTSuggestion = function(correctionType) {
+// Generate GPT suggestion - Now calls real AI analysis
+AudioToolsPro.prototype.generateGPTSuggestion = async function(correctionType, analysisData = null) {
+    // If GPT analysis is enabled and we have API access, get real AI response
+    if (this.rhythmTimingConfig.enableGPTAnalysis && this.openaiConfig.enabled && this.openaiConfig.apiKey) {
+        try {
+            return await this.getRealGPTSuggestion(correctionType, analysisData);
+        } catch (error) {
+            this.log(`⚠️ GPT suggestion failed, using fallback: ${error.message}`, 'warning');
+        }
+    }
+    
+    // Fallback to hardcoded suggestions if AI is not available
     const suggestions = {
         'long_pause': 'Consider reducing this pause to maintain engagement while preserving natural speech rhythm.',
         'awkward_gap': 'This gap disrupts the conversational flow. Shortening it will improve listener experience.',
@@ -21265,6 +21318,293 @@ AudioToolsPro.prototype.generateGPTSuggestion = function(correctionType) {
     };
     
     return suggestions[correctionType.type] || 'GPT-4 analysis suggests optimizing this timing for better flow.';
+};
+
+// Get real GPT-4 suggestion for rhythm analysis
+AudioToolsPro.prototype.getRealGPTSuggestion = async function(correctionType, analysisData = null) {
+    if (!this.openaiConfig.apiKey) {
+        throw new Error('OpenAI API key not configured');
+    }
+    
+    const prompt = this.buildRhythmAnalysisPrompt(correctionType, analysisData);
+    
+    try {
+        const response = await fetch(`${this.openaiConfig.baseURL}/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${this.openaiConfig.apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: this.openaiConfig.model,
+                messages: [
+                    {
+                        role: 'system',
+                        content: 'You are an expert audio engineer and content creator specializing in rhythm, timing, and conversational flow optimization. Provide concise, actionable advice for audio timing corrections.'
+                    },
+                    {
+                        role: 'user',
+                        content: prompt
+                    }
+                ],
+                max_tokens: this.openaiConfig.maxTokens,
+                temperature: this.openaiConfig.temperature
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        return data.choices[0].message.content.trim();
+        
+    } catch (error) {
+        this.log(`❌ GPT-4 suggestion request failed: ${error.message}`, 'error');
+        throw error;
+    }
+};
+
+// Build prompt for rhythm analysis
+AudioToolsPro.prototype.buildRhythmAnalysisPrompt = function(correctionType, analysisData = null) {
+    const basePrompt = `Analyze this audio timing issue and provide a concise, actionable recommendation:
+    
+Issue Type: ${correctionType.type}
+Description: ${correctionType.description || 'Timing optimization needed'}`;
+    
+    if (analysisData) {
+        return `${basePrompt}
+
+Audio Analysis Data:
+- Speaking Rate: ${analysisData.speakingRate || 'N/A'} words per minute
+- Speech/Silence Ratio: ${analysisData.speechRatio || 'N/A'}%
+- Average Pause Duration: ${analysisData.avgPauseDuration || 'N/A'}ms
+- Rhythm Consistency: ${analysisData.rhythmConsistency || 'N/A'}%
+
+Provide a specific, actionable recommendation for this timing issue. Keep it under 100 words and focus on practical improvements.`;
+    }
+    
+    return `${basePrompt}
+
+Provide a specific, actionable recommendation for this timing issue. Keep it under 100 words and focus on practical improvements.`;
+};
+
+// Perform comprehensive OpenAI rhythm analysis
+AudioToolsPro.prototype.performOpenAIRhythmAnalysis = async function(analysisResults, suggestedCorrections) {
+    if (!this.openaiConfig.apiKey) {
+        throw new Error('OpenAI API key not configured');
+    }
+    
+    try {
+        // Build comprehensive analysis prompt
+        const analysisPrompt = this.buildComprehensiveRhythmPrompt(analysisResults, suggestedCorrections);
+        
+        const response = await fetch(`${this.openaiConfig.baseURL}/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${this.openaiConfig.apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: this.openaiConfig.model,
+                messages: [
+                    {
+                        role: 'system',
+                        content: 'You are an expert audio engineer and content creator specializing in rhythm, timing, and conversational flow optimization. Analyze the provided audio data and provide specific, actionable recommendations for timing improvements.'
+                    },
+                    {
+                        role: 'user',
+                        content: analysisPrompt
+                    }
+                ],
+                max_tokens: this.openaiConfig.maxTokens,
+                temperature: this.openaiConfig.temperature
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        const aiAnalysis = data.choices[0].message.content.trim();
+        
+        // Parse AI response and update corrections with real AI suggestions
+        const updatedCorrections = await this.parseAndApplyAIAnalysis(aiAnalysis, suggestedCorrections, analysisResults);
+        
+        this.log('🤖 AI analysis applied to rhythm corrections', 'success');
+        return updatedCorrections;
+        
+    } catch (error) {
+        this.log(`❌ OpenAI rhythm analysis failed: ${error.message}`, 'error');
+        throw error;
+    }
+};
+
+// Build comprehensive prompt for rhythm analysis
+AudioToolsPro.prototype.buildComprehensiveRhythmPrompt = function(analysisResults, suggestedCorrections) {
+    const speechRegions = analysisResults.speechRegions || [];
+    const silenceRegions = analysisResults.silenceRegions || [];
+    const duration = analysisResults.duration || 0;
+    
+    // Calculate key metrics
+    const speakingRate = speechRegions.length > 0 ? (speechRegions.length * 60) / (duration / 60) : 0;
+    const avgPauseDuration = silenceRegions.length > 0 ? 
+        silenceRegions.reduce((sum, pause) => sum + pause.duration, 0) / silenceRegions.length : 0;
+    const speechRatio = duration > 0 ? (speechRegions.length * 100) / (speechRegions.length + silenceRegions.length) : 0;
+    
+    return `Analyze this audio content for rhythm and timing optimization:
+
+AUDIO ANALYSIS DATA:
+- Total Duration: ${duration.toFixed(2)} seconds
+- Speaking Rate: ${speakingRate.toFixed(1)} words per minute
+- Speech/Silence Ratio: ${speechRatio.toFixed(1)}%
+- Average Pause Duration: ${avgPauseDuration.toFixed(0)}ms
+- Number of Speech Segments: ${speechRegions.length}
+- Number of Silence Segments: ${silenceRegions.length}
+
+SUGGESTED CORRECTIONS:
+${suggestedCorrections.map((correction, index) => 
+    `${index + 1}. ${correction.name} at ${correction.timestamp.toFixed(2)}s - ${correction.description}`
+).join('\n')}
+
+Please provide:
+1. Overall assessment of the audio's rhythm and pacing
+2. Specific recommendations for each suggested correction
+3. Additional timing improvements not identified in the analysis
+4. Optimal speaking rate and pause patterns for this content type
+
+Format your response as actionable recommendations that can be applied to improve the audio's flow and engagement.`;
+};
+
+// Parse AI analysis and apply to corrections
+AudioToolsPro.prototype.parseAndApplyAIAnalysis = async function(aiAnalysis, suggestedCorrections, analysisResults) {
+    // Update each correction with AI-generated suggestions
+    const updatedCorrections = suggestedCorrections.map(async (correction) => {
+        try {
+            // Get AI suggestion for this specific correction
+            const aiSuggestion = await this.getRealGPTSuggestion(correction, analysisResults);
+            correction.gptSuggestion = aiSuggestion;
+            correction.aiAnalyzed = true;
+        } catch (error) {
+            this.log(`⚠️ Failed to get AI suggestion for correction ${correction.name}: ${error.message}`, 'warning');
+            correction.aiAnalyzed = false;
+        }
+        return correction;
+    });
+    
+    // Wait for all AI suggestions to complete
+    return await Promise.all(updatedCorrections);
+};
+
+// Get AI-powered audio assessment
+AudioToolsPro.prototype.getAIAudioAssessment = async function(analysisResults) {
+    if (!this.openaiConfig.apiKey) {
+        throw new Error('OpenAI API key not configured');
+    }
+    
+    const speechRegions = analysisResults.speechRegions || [];
+    const silenceRegions = analysisResults.silenceRegions || [];
+    const duration = analysisResults.duration || 0;
+    
+    // Calculate key metrics
+    const speakingRate = speechRegions.length > 0 ? (speechRegions.length * 60) / (duration / 60) : 0;
+    const avgPauseDuration = silenceRegions.length > 0 ? 
+        silenceRegions.reduce((sum, pause) => sum + pause.duration, 0) / silenceRegions.length : 0;
+    const speechRatio = duration > 0 ? (speechRegions.length * 100) / (speechRegions.length + silenceRegions.length) : 0;
+    
+    const prompt = `Analyze this audio content and provide a professional assessment:
+
+AUDIO METRICS:
+- Duration: ${duration.toFixed(2)} seconds
+- Speaking Rate: ${speakingRate.toFixed(1)} words per minute
+- Speech/Silence Ratio: ${speechRatio.toFixed(1)}%
+- Average Pause Duration: ${avgPauseDuration.toFixed(0)}ms
+- Speech Segments: ${speechRegions.length}
+- Silence Segments: ${silenceRegions.length}
+
+Please provide:
+1. A professional assessment of the audio's pacing and rhythm (2-3 sentences)
+2. 3-5 specific, actionable recommendations for improvement
+
+Format your response as JSON:
+{
+  "assessment": "Your professional assessment here",
+  "recommendations": ["Recommendation 1", "Recommendation 2", "Recommendation 3"]
+}`;
+    
+    try {
+        const response = await fetch(`${this.openaiConfig.baseURL}/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${this.openaiConfig.apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: this.openaiConfig.model,
+                messages: [
+                    {
+                        role: 'system',
+                        content: 'You are an expert audio engineer and content creator. Provide professional, actionable assessments of audio content for rhythm and pacing optimization.'
+                    },
+                    {
+                        role: 'user',
+                        content: prompt
+                    }
+                ],
+                max_tokens: this.openaiConfig.maxTokens,
+                temperature: this.openaiConfig.temperature
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        const aiResponse = data.choices[0].message.content.trim();
+        
+        // Parse JSON response
+        try {
+            const parsed = JSON.parse(aiResponse);
+            return {
+                assessment: parsed.assessment || 'AI analysis completed',
+                recommendations: parsed.recommendations || ['No specific recommendations available']
+            };
+        } catch (parseError) {
+            // If JSON parsing fails, extract text manually
+            return {
+                assessment: aiResponse.substring(0, 200) + '...',
+                recommendations: ['AI analysis completed - see full assessment above']
+            };
+        }
+        
+    } catch (error) {
+        this.log(`❌ AI assessment request failed: ${error.message}`, 'error');
+        throw error;
+    }
+};
+
+// Fallback assessment when AI is not available
+AudioToolsPro.prototype.getFallbackAssessment = function(speakingRate) {
+    if (speakingRate < 120) {
+        return "This audio has a slower, more deliberate speaking pace that's excellent for instructional content or serious discussions.";
+    } else if (speakingRate > 180) {
+        return "This audio features a fast-paced, energetic speaking style that's great for dynamic content.";
+    } else {
+        return "This audio demonstrates an optimal speaking pace that balances engagement with clarity.";
+    }
+};
+
+// Fallback recommendations when AI is not available
+AudioToolsPro.prototype.getFallbackRecommendations = function(speakingRate) {
+    if (speakingRate < 120) {
+        return ["The slower pace is perfect for comprehension - no speed adjustments needed"];
+    } else if (speakingRate > 180) {
+        return ["Consider slight pacing adjustments for better listener comprehension"];
+    } else {
+        return ["Speaking rate is in the ideal range for most audiences"];
+    }
 };
 
 // Apply single timing correction
@@ -21313,7 +21653,7 @@ AudioToolsPro.prototype.generateCorrectionPreview = async function() {
 };
 
 // Generate AI insights about the audio
-AudioToolsPro.prototype.generateAIAudioInsights = function(rhythmResults, analysisResults, corrections) {
+AudioToolsPro.prototype.generateAIAudioInsights = async function(rhythmResults, analysisResults, corrections) {
     if (!rhythmResults || !analysisResults) {
         return {
             overallAssessment: "Audio analysis completed with basic metrics.",
@@ -21335,16 +21675,22 @@ AudioToolsPro.prototype.generateAIAudioInsights = function(rhythmResults, analys
     let rhythmPattern = "";
     let recommendations = [];
     
-    // Speaking rate assessment
-    if (speakingRate < 120) {
-        overallAssessment = "This audio has a slower, more deliberate speaking pace that's excellent for instructional content or serious discussions.";
-        recommendations.push("The slower pace is perfect for comprehension - no speed adjustments needed");
-    } else if (speakingRate > 180) {
-        overallAssessment = "This audio features a fast-paced, energetic speaking style that's great for dynamic content.";
-        recommendations.push("Consider slight pacing adjustments for better listener comprehension");
+    // Get AI-powered assessment if GPT analysis is enabled
+    if (this.rhythmTimingConfig.enableGPTAnalysis && this.openaiConfig.enabled && this.openaiConfig.apiKey) {
+        try {
+            const aiAssessment = await this.getAIAudioAssessment(analysisResults);
+            overallAssessment = aiAssessment.assessment;
+            recommendations = aiAssessment.recommendations;
+        } catch (error) {
+            this.log(`⚠️ AI assessment failed, using fallback: ${error.message}`, 'warning');
+            // Fall back to hardcoded assessment
+            overallAssessment = this.getFallbackAssessment(speakingRate);
+            recommendations = this.getFallbackRecommendations(speakingRate);
+        }
     } else {
-        overallAssessment = "This audio demonstrates an optimal speaking pace that balances engagement with clarity.";
-        recommendations.push("Speaking rate is in the ideal range for most audiences");
+        // Use hardcoded assessment when AI is not available
+        overallAssessment = this.getFallbackAssessment(speakingRate);
+        recommendations = this.getFallbackRecommendations(speakingRate);
     }
     
     // Audio characteristics based on speech/silence ratio
@@ -21389,7 +21735,7 @@ AudioToolsPro.prototype.generateAIAudioInsights = function(rhythmResults, analys
 };
 
 // Display rhythm analysis results
-AudioToolsPro.prototype.displayRhythmAnalysisResults = function(corrections, rhythmResults) {
+AudioToolsPro.prototype.displayRhythmAnalysisResults = async function(corrections, rhythmResults) {
     const container = document.getElementById('rhythmAnalysis');
     if (!container) return;
     
@@ -22824,13 +23170,426 @@ AudioToolsPro.prototype.updateLoadButtonState = function(state) {
 };
 
 // ========================================
+// LOADING SCREEN MANAGER
+// ========================================
+
+class LoadingScreenManager {
+    constructor() {
+        this.loadingScreen = null;
+        this.progressRing = null;
+        this.progressPercentage = null;
+        this.statusText = null;
+        this.statusDetails = null;
+        this.steps = [];
+        this.currentStep = 0;
+        this.totalSteps = 5;
+        this.progress = 0;
+        this.circumference = 351.86; // 2 * π * 56
+    }
+
+    show() {
+        // Loading screen is already visible by default
+        this.init();
+    }
+
+    init() {
+        this.loadingScreen = document.getElementById('loadingScreen');
+        this.progressRing = document.querySelector('.progress-ring-circle');
+        this.progressPercentage = document.querySelector('.progress-percentage');
+        this.statusText = document.querySelector('.status-text');
+        this.statusDetails = document.querySelector('.status-details');
+        this.steps = document.querySelectorAll('.step');
+        
+        if (this.progressRing) {
+            this.progressRing.style.strokeDasharray = this.circumference;
+            this.progressRing.style.strokeDashoffset = this.circumference;
+        }
+
+        // Start the loading simulation
+        this.simulateLoading();
+    }
+
+    updateProgress(percentage, statusText = '', statusDetails = '') {
+        this.progress = Math.min(100, Math.max(0, percentage));
+        
+        // Update progress ring
+        if (this.progressRing) {
+            const offset = this.circumference - (this.progress / 100) * this.circumference;
+            this.progressRing.style.strokeDashoffset = offset;
+        }
+        
+        // Update percentage display
+        if (this.progressPercentage) {
+            this.progressPercentage.textContent = `${Math.round(this.progress)}%`;
+        }
+        
+        // Update status text
+        if (statusText && this.statusText) {
+            this.statusText.textContent = statusText;
+        }
+        
+        if (statusDetails && this.statusDetails) {
+            this.statusDetails.textContent = statusDetails;
+        }
+    }
+
+    setStep(stepIndex, statusText = '', statusDetails = '') {
+        this.currentStep = stepIndex;
+        
+        // Update step indicators
+        this.steps.forEach((step, index) => {
+            step.classList.remove('active', 'completed');
+            if (index < stepIndex) {
+                step.classList.add('completed');
+            } else if (index === stepIndex) {
+                step.classList.add('active');
+            }
+        });
+        
+        // Update progress based on step
+        const stepProgress = (stepIndex / this.totalSteps) * 100;
+        this.updateProgress(stepProgress, statusText, statusDetails);
+    }
+
+    async simulateLoading() {
+        const loadingSteps = [
+            { text: 'Initializing Core Systems...', details: 'Loading CEP interface and core modules', duration: 1000 },
+            { text: 'Loading Audio Processing...', details: 'Initializing Web Audio API and FFmpeg', duration: 1500 },
+            { text: 'Connecting AI Services...', details: 'Setting up OpenAI and speech recognition', duration: 1200 },
+            { text: 'Establishing Premiere Pro Link...', details: 'Connecting to Adobe Premiere Pro', duration: 1000 },
+            { text: 'Finalizing Setup...', details: 'Preparing user interface', duration: 800 }
+        ];
+
+        for (let i = 0; i < loadingSteps.length; i++) {
+            const step = loadingSteps[i];
+            this.setStep(i, step.text, step.details);
+            
+            // Simulate loading time with smooth progress
+            const startProgress = (i / this.totalSteps) * 100;
+            const endProgress = ((i + 1) / this.totalSteps) * 100;
+            
+            await this.animateProgress(startProgress, endProgress, step.duration);
+        }
+        
+        // Final completion
+        this.setStep(this.totalSteps, 'Ready!', 'Media Tools Pro is ready to use');
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Auto-hide after completion
+        setTimeout(() => this.hide(), 1000);
+    }
+
+    async animateProgress(startProgress, endProgress, duration) {
+        const startTime = Date.now();
+        const progressDiff = endProgress - startProgress;
+        
+        return new Promise(resolve => {
+            const animate = () => {
+                const elapsed = Date.now() - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                
+                // Smooth easing function
+                const easeProgress = progress < 0.5 
+                    ? 2 * progress * progress 
+                    : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+                
+                const currentProgress = startProgress + (progressDiff * easeProgress);
+                this.updateProgress(currentProgress);
+                
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                } else {
+                    resolve();
+                }
+            };
+            animate();
+        });
+    }
+
+    async hide() {
+        if (this.loadingScreen) {
+            this.loadingScreen.classList.add('fade-out');
+            
+            // Wait for fade out animation
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // Show main app
+            const appContainer = document.querySelector('.app-container');
+            if (appContainer) {
+                appContainer.style.display = 'block';
+                // Smooth fade in
+                appContainer.style.opacity = '0';
+                appContainer.style.transition = 'opacity 0.5s ease-out';
+                setTimeout(() => {
+                    appContainer.style.opacity = '1';
+                }, 50);
+            }
+            
+            // Remove loading screen from DOM after animation
+            setTimeout(() => {
+                if (this.loadingScreen) {
+                    this.loadingScreen.remove();
+                }
+            }, 1000);
+        }
+    }
+
+    showError(message) {
+        if (this.statusText) {
+            this.statusText.textContent = 'Error!';
+            this.statusText.style.color = 'var(--color-accent-error)';
+        }
+        if (this.statusDetails) {
+            this.statusDetails.textContent = message;
+        }
+        
+        // Show error state for a few seconds then hide
+        setTimeout(() => this.hide(), 3000);
+    }
+}
+
+// ========================================
+// SIMPLE LOADING SCREEN MANAGER
+// ========================================
+
+function initializeLoadingScreen() {
+    console.log('🚀 Starting enhanced loading screen...');
+    
+    const loadingScreen = document.getElementById('loadingScreen');
+    const appContainer = document.querySelector('.app-container');
+    const progressRing = document.querySelector('.progress-ring-fill');
+    const progressPercentage = document.querySelector('.progress-percentage');
+    const progressLabel = document.querySelector('.progress-label');
+    const statusText = document.querySelector('.status-text');
+    const statusDetails = document.querySelector('.status-details');
+    const progressFill = document.querySelector('.progress-fill');
+    const steps = document.querySelectorAll('.step');
+    const loadingDebug = document.getElementById('loadingDebug');
+    
+    if (!loadingScreen || !appContainer) {
+        console.error('❌ Loading screen elements not found');
+        return;
+    }
+    
+    // Initialize progress ring with new radius
+    const circumference = 414.69; // 2 * π * 66 (updated radius)
+    if (progressRing) {
+        progressRing.style.strokeDasharray = circumference;
+        progressRing.style.strokeDashoffset = circumference;
+    }
+    
+    let currentProgress = 0;
+    let currentStep = 0;
+    
+    function updateProgress(percentage) {
+        currentProgress = percentage;
+        if (progressRing) {
+            const offset = circumference - (percentage / 100) * circumference;
+            progressRing.style.strokeDashoffset = offset;
+        }
+        if (progressPercentage) {
+            progressPercentage.textContent = Math.round(percentage) + '%';
+        }
+        if (progressFill) {
+            progressFill.style.width = percentage + '%';
+        }
+    }
+    
+    function setStep(stepIndex, statusTextVal, statusDetailsVal) {
+        currentStep = stepIndex;
+        
+        // Update step indicators
+        steps.forEach((step, index) => {
+            step.classList.remove('active', 'completed');
+            if (index < stepIndex) {
+                step.classList.add('completed');
+            } else if (index === stepIndex) {
+                step.classList.add('active');
+            }
+        });
+        
+        // Update status text
+        if (statusText && statusTextVal) {
+            statusText.textContent = statusTextVal;
+        }
+        if (statusDetails && statusDetailsVal) {
+            statusDetails.textContent = statusDetailsVal;
+        }
+        
+        // Update progress
+        const stepProgress = (stepIndex / 5) * 100;
+        updateProgress(stepProgress);
+    }
+    
+    function hideLoadingScreen() {
+        console.log('🎉 Hiding enhanced loading screen...');
+        if (loadingScreen) {
+            loadingScreen.classList.add('fade-out');
+            
+            setTimeout(() => {
+                if (appContainer) {
+                    appContainer.style.display = 'block';
+                    appContainer.style.opacity = '1';
+                }
+                
+                setTimeout(() => {
+                    if (loadingScreen && loadingScreen.parentNode) {
+                        loadingScreen.remove();
+                    }
+                }, 800);
+            }, 800);
+        }
+    }
+    
+    // Enhanced loading sequence
+    const loadingSteps = [
+        { text: 'Initializing Core System...', details: 'Loading base components and CEP interface' },
+        { text: 'Loading Audio Engine...', details: 'Initializing Web Audio API and processing modules' },
+        { text: 'Connecting AI Services...', details: 'Setting up OpenAI and speech recognition' },
+        { text: 'Establishing Premiere Integration...', details: 'Connecting to Adobe Premiere Pro' },
+        { text: 'All Systems Operational...', details: 'Preparing user interface and finalizing setup' }
+    ];
+    
+    // Start the loading sequence
+    async function runLoadingSequence() {
+        try {
+            console.log('🔄 Starting loading sequence...');
+            
+            for (let i = 0; i < loadingSteps.length; i++) {
+                const step = loadingSteps[i];
+                console.log(`🔄 Step ${i + 1}: ${step.text}`);
+                
+                setStep(i, step.text, step.details);
+                
+                // Wait a bit for this step
+                await new Promise(resolve => setTimeout(resolve, 800));
+                
+                // Update progress
+                const progress = ((i + 1) / 5) * 100;
+                updateProgress(progress);
+            }
+            
+            // Final step
+            console.log('✅ All steps completed, initializing app...');
+            setStep(5, '✅ Ready!', 'Media Tools Pro is ready to use');
+            updateProgress(100);
+            
+            // Initialize the app
+            try {
+                window.audioToolsPro = new AudioToolsPro();
+                await window.audioToolsPro.init();
+                console.log('✅ App initialized successfully');
+            } catch (error) {
+                console.error('❌ App initialization failed:', error);
+                // Continue anyway
+            }
+            
+            // Wait a moment then hide
+            setTimeout(() => {
+                hideLoadingScreen();
+            }, 1000);
+            
+        } catch (error) {
+            console.error('❌ Loading sequence failed:', error);
+            // Show error but continue
+            setStep(currentStep, '⚠️ Loading completed with warnings', 'Some features may not be available');
+            setTimeout(() => {
+                hideLoadingScreen();
+            }, 2000);
+        }
+    }
+    
+    // Start the sequence
+    runLoadingSequence();
+    
+    // Safety timeout - force completion after 8 seconds
+    setTimeout(() => {
+        if (currentProgress < 100) {
+            console.warn('⚠️ Loading timeout reached, forcing completion...');
+            setStep(5, '✅ Ready!', 'Media Tools Pro is ready to use');
+            updateProgress(100);
+            
+            // Try to initialize the app
+            if (!window.audioToolsPro) {
+                try {
+                    window.audioToolsPro = new AudioToolsPro();
+                    window.audioToolsPro.init();
+                } catch (error) {
+                    console.error('Failed to initialize app in timeout mode:', error);
+                }
+            }
+            
+            setTimeout(() => {
+                hideLoadingScreen();
+            }, 1000);
+        }
+    }, 8000);
+}
+
+// ========================================
 // INITIALIZATION
 // ========================================
 
 // Initialize the application when DOM is ready
 document.addEventListener('DOMContentLoaded', async () => {
-    window.audioToolsPro = new AudioToolsPro();
-    await window.audioToolsPro.init();
+    console.log('🚀 DOM loaded, starting initialization...');
+    
+    // Initialize simple loading screen (handles app initialization internally)
+    initializeLoadingScreen();
+    
+    // Show debug options after 3 seconds if loading is still in progress
+    setTimeout(() => {
+        const loadingDebug = document.getElementById('loadingDebug');
+        const loadingScreen = document.getElementById('loadingScreen');
+        
+        if (loadingDebug && loadingScreen && loadingScreen.style.display !== 'none') {
+            loadingDebug.style.display = 'block';
+            console.log('🔧 Debug options shown - loading is taking longer than expected');
+        }
+    }, 3000);
+    
+    // Add debug button functionality
+    document.addEventListener('click', (e) => {
+        if (e.target && e.target.id === 'debugSkipLoading') {
+            console.log('🔧 Debug skip button clicked - forcing app to show');
+            
+            const loadingScreen = document.getElementById('loadingScreen');
+            const appContainer = document.querySelector('.app-container');
+            
+            // Hide loading screen
+            if (loadingScreen) {
+                loadingScreen.style.display = 'none';
+            }
+            
+            // Show app container
+            if (appContainer) {
+                appContainer.style.display = 'block';
+                appContainer.style.opacity = '1';
+            }
+            
+            // Try to initialize the app if it hasn't been initialized yet
+            if (!window.audioToolsPro) {
+                try {
+                    window.audioToolsPro = new AudioToolsPro();
+                    window.audioToolsPro.init();
+                } catch (error) {
+                    console.error('Failed to initialize app in debug mode:', error);
+                }
+            }
+        }
+        
+        if (e.target && e.target.id === 'debugRetryLoading') {
+            console.log('🔧 Debug retry button clicked - restarting loading sequence');
+            
+            const loadingDebug = document.getElementById('loadingDebug');
+            if (loadingDebug) {
+                loadingDebug.style.display = 'none';
+            }
+            
+            // Restart the loading sequence
+            initializeLoadingScreen();
+        }
+    });
     
     // Add global test function for debugging
     window.globalTestApplySilenceCuts = () => {

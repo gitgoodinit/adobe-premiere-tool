@@ -15,7 +15,205 @@
 </head>
 
 <body>
-  <div class="app-container">
+  <!-- Enhanced Loading Screen -->
+  <div id="loadingScreen" class="loading-screen">
+    <div class="loading-container">
+      <!-- Animated Background -->
+      <div class="loading-background">
+        <div class="bg-gradient-orb orb-1"></div>
+        <div class="bg-gradient-orb orb-2"></div>
+        <div class="bg-gradient-orb orb-3"></div>
+        <div class="floating-particles">
+          <div class="particle" style="--delay: 0s; --duration: 8s; --x: 10%; --y: 20%;"></div>
+          <div class="particle" style="--delay: 1s; --duration: 12s; --x: 90%; --y: 80%;"></div>
+          <div class="particle" style="--delay: 2s; --duration: 10s; --x: 70%; --y: 30%;"></div>
+          <div class="particle" style="--delay: 3s; --duration: 14s; --x: 30%; --y: 70%;"></div>
+          <div class="particle" style="--delay: 4s; --duration: 9s; --x: 50%; --y: 10%;"></div>
+          <div class="particle" style="--delay: 5s; --duration: 11s; --x: 20%; --y: 90%;"></div>
+        </div>
+      </div>
+
+      <!-- Brand Logo Area -->
+      <div class="loading-brand">
+        <div class="brand-icon-container">
+          <div class="brand-icon">
+            <i class="fas fa-waveform-lines"></i>
+          </div>
+          <div class="icon-glow"></div>
+        </div>
+        <h1 class="brand-title">Media Tools Pro</h1>
+        <p class="brand-subtitle">Professional Audio Processing for Premiere Pro</p>
+        <div class="version-indicator">
+          <span class="version-badge">Phase 1</span>
+          <span class="version-detail">CEP Extension</span>
+        </div>
+      </div>
+
+      <!-- Enhanced Loading Animation -->
+      <div class="loading-animation">
+        <!-- Modern Progress Ring -->
+        <div class="progress-ring-container">
+          <div class="progress-ring">
+            <svg class="progress-ring-svg" width="140" height="140" viewBox="0 0 140 140">
+              <defs>
+                <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" style="stop-color:#00d4ff;stop-opacity:1" />
+                  <stop offset="50%" style="stop-color:#0099ff;stop-opacity:1" />
+                  <stop offset="100%" style="stop-color:#00ff88;stop-opacity:1" />
+                </linearGradient>
+                <filter id="glow">
+                  <feGaussianBlur stdDeviation="3" result="coloredBlur" />
+                  <feMerge>
+                    <feMergeNode in="coloredBlur" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+              </defs>
+              <circle class="progress-ring-bg" stroke="rgba(255, 255, 255, 0.1)" stroke-width="4" fill="transparent"
+                r="66" cx="70" cy="70" />
+              <circle class="progress-ring-fill" stroke="url(#progressGradient)" stroke-width="4" fill="transparent"
+                r="66" cx="70" cy="70" filter="url(#glow)" />
+            </svg>
+            <div class="progress-content">
+              <div class="progress-percentage">0%</div>
+              <div class="progress-label">Loading</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Enhanced Waveform Loader -->
+        <div class="waveform-loader">
+          <div class="wave-container">
+            <div class="wave-bar" style="--delay: 0s; --height: 20px;"></div>
+            <div class="wave-bar" style="--delay: 0.1s; --height: 35px;"></div>
+            <div class="wave-bar" style="--delay: 0.2s; --height: 50px;"></div>
+            <div class="wave-bar" style="--delay: 0.3s; --height: 65px;"></div>
+            <div class="wave-bar" style="--delay: 0.4s; --height: 80px;"></div>
+            <div class="wave-bar" style="--delay: 0.5s; --height: 65px;"></div>
+            <div class="wave-bar" style="--delay: 0.6s; --height: 50px;"></div>
+            <div class="wave-bar" style="--delay: 0.7s; --height: 35px;"></div>
+            <div class="wave-bar" style="--delay: 0.8s; --height: 20px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Enhanced Loading Status -->
+      <div class="loading-status">
+        <div class="status-container">
+          <div class="status-icon">
+            <i class="fas fa-cog fa-spin"></i>
+          </div>
+          <div class="status-content">
+            <div class="status-text">Initializing Media Tools Pro...</div>
+            <div class="status-details">Loading core components</div>
+          </div>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="progress-bar-container">
+          <div class="progress-bar">
+            <div class="progress-fill"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Enhanced Loading Steps -->
+      <div class="loading-steps">
+        <div class="steps-container">
+          <div class="step active" data-step="1">
+            <div class="step-icon">
+              <i class="fas fa-cog"></i>
+            </div>
+            <div class="step-content">
+              <div class="step-label">Core System</div>
+              <div class="step-description">Initializing base components</div>
+            </div>
+            <div class="step-indicator"></div>
+          </div>
+
+          <div class="step" data-step="2">
+            <div class="step-icon">
+              <i class="fas fa-waveform-lines"></i>
+            </div>
+            <div class="step-content">
+              <div class="step-label">Audio Engine</div>
+              <div class="step-description">Loading audio processing</div>
+            </div>
+            <div class="step-indicator"></div>
+          </div>
+
+          <div class="step" data-step="3">
+            <div class="step-icon">
+              <i class="fas fa-brain"></i>
+            </div>
+            <div class="step-content">
+              <div class="step-label">AI Services</div>
+              <div class="step-description">Connecting AI analysis</div>
+            </div>
+            <div class="step-indicator"></div>
+          </div>
+
+          <div class="step" data-step="4">
+            <div class="step-icon">
+              <i class="fas fa-link"></i>
+            </div>
+            <div class="step-content">
+              <div class="step-label">Premiere Integration</div>
+              <div class="step-description">Establishing connection</div>
+            </div>
+            <div class="step-indicator"></div>
+          </div>
+
+          <div class="step" data-step="5">
+            <div class="step-icon">
+              <i class="fas fa-check"></i>
+            </div>
+            <div class="step-content">
+              <div class="step-label">Ready</div>
+              <div class="step-description">All systems operational</div>
+            </div>
+            <div class="step-indicator"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Enhanced Debug Options -->
+      <div class="loading-debug" id="loadingDebug" style="display: none;">
+        <div class="debug-container">
+          <div class="debug-header">
+            <i class="fas fa-tools"></i>
+            <span>Loading is taking longer than expected</span>
+          </div>
+          <div class="debug-actions">
+            <button id="debugSkipLoading" class="debug-btn primary">
+              <i class="fas fa-bolt"></i>
+              <span>Skip Loading</span>
+            </button>
+            <button id="debugRetryLoading" class="debug-btn secondary">
+              <i class="fas fa-redo"></i>
+              <span>Retry</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Loading Tips -->
+      <div class="loading-tips">
+        <div class="tip-container">
+          <div class="tip-icon">
+            <i class="fas fa-lightbulb"></i>
+          </div>
+          <div class="tip-content">
+            <div class="tip-text" id="loadingTip">
+              First time loading may take longer as we optimize your system
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="app-container" style="display: none;">
     <!-- Header -->
     <header class="header">
       <div class="header-content">
@@ -958,6 +1156,17 @@
           <div class="settings-section">
             <h4><i class="fas fa-key"></i> API Configuration</h4>
             <div class="api-settings">
+
+              <div class="api-group">
+                <label for="openaiApiKey">OpenAI API Key (GPT-4 & Whisper)</label>
+                <div class="api-input-group">
+                  <input type="password" id="openaiApiKey" class="api-input" placeholder="sk-...">
+                  <button class="test-btn" id="testApiKey">Test</button>
+                </div>
+                <div class="api-status" id="openaiApiStatus">
+                  <span class="status-badge">Not configured</span>
+                </div>
+              </div>
 
               <div class="api-group">
                 <label for="googleApiKey">Google Cloud API Key (Speech-to-Text)</label>
