@@ -1,0 +1,1486 @@
+{
+    "info": {
+        "name": "Audio Tools Pro API - CORRECTED",
+        "description": "Corrected API collection for Audio Tools Pro Backend - Adobe Premiere Pro Plugin",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+        "version": "1.0.0"
+    },
+    "variable": [
+        {
+            "key": "base_url",
+            "value": "http://localhost:3001/api",
+            "type": "string"
+        },
+        {
+            "key": "request_id",
+            "value": "{{$randomUUID}}",
+            "type": "string"
+        }
+    ],
+    "item": [
+        {
+            "name": "Health & Status",
+            "item": [
+                {
+                    "name": "Basic Health Check",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/health",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "health"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Detailed Health Check",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/health/detailed",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "health",
+                                "detailed"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Readiness Check",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/health/ready",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "health",
+                                "ready"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Liveness Check",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/health/live",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "health",
+                                "live"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "System Metrics",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/health/metrics",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "health",
+                                "metrics"
+                            ]
+                        }
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "Silence Detection",
+            "item": [
+                {
+                    "name": "Detect Silence",
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "audio",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "methods",
+                                    "value": "[\"ffmpeg\",\"webAudio\",\"transcript\"]",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "noiseThreshold",
+                                    "value": "-30",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "minDuration",
+                                    "value": "0.5",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "confidenceThreshold",
+                                    "value": "0.7",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "enableAI",
+                                    "value": "true",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "enablePreprocessing",
+                                    "value": "true",
+                                    "type": "text"
+                                }
+                            ]
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/silence/detect",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "silence",
+                                "detect"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Trim Silence",
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "audio",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "silenceSegments",
+                                    "value": "[{\"start\":5.2,\"end\":7.8,\"duration\":2.6}]",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "trimMode",
+                                    "value": "remove",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "fadeInDuration",
+                                    "value": "0.1",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "fadeOutDuration",
+                                    "value": "0.1",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "outputFormat",
+                                    "value": "mp3",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "quality",
+                                    "value": "high",
+                                    "type": "text"
+                                }
+                            ]
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/silence/trim",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "silence",
+                                "trim"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get Detection Methods",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/silence/methods",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "silence",
+                                "methods"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Batch Silence Detection",
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "audio",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "audio",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "methods",
+                                    "value": "[\"ffmpeg\",\"webAudio\"]",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "noiseThreshold",
+                                    "value": "-30",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "minDuration",
+                                    "value": "0.5",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "parallel",
+                                    "value": "true",
+                                    "type": "text"
+                                }
+                            ]
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/silence/batch",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "silence",
+                                "batch"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get Silence Job Status",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/silence/status/{{request_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "silence",
+                                "status",
+                                "{{request_id}}"
+                            ]
+                        }
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "Audio Overlap Detection",
+            "item": [
+                {
+                    "name": "Detect Overlaps",
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "audio",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "audio",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "sensitivity",
+                                    "value": "5",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "frequencyRange",
+                                    "value": "full",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "fftSize",
+                                    "value": "2048",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "analysisMode",
+                                    "value": "hybrid",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "overlapThreshold",
+                                    "value": "0.3",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "minOverlapDuration",
+                                    "value": "0.1",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "enableML",
+                                    "value": "true",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "enableCrossCorrelation",
+                                    "value": "true",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "enableHarmonicAnalysis",
+                                    "value": "false",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "enableBackgroundNoiseDetection",
+                                    "value": "true",
+                                    "type": "text"
+                                }
+                            ]
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/overlap/detect",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "overlap",
+                                "detect"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Resolve Overlaps",
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "audio",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "audio",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "resolutionMethod",
+                                    "value": "auto",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "overlaps",
+                                    "value": "[{\"start\":12.5,\"end\":15.2,\"duration\":2.7,\"tracks\":[0,1]}]",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "shiftAmount",
+                                    "value": "0.1",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "duckingRatio",
+                                    "value": "0.3",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "trimMode",
+                                    "value": "fade",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "outputFormat",
+                                    "value": "mp3",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "quality",
+                                    "value": "high",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "preserveOriginal",
+                                    "value": "true",
+                                    "type": "text"
+                                }
+                            ]
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/overlap/resolve",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "overlap",
+                                "resolve"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get Overlap Algorithms",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/overlap/algorithms",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "overlap",
+                                "algorithms"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Frequency Analysis",
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "audio",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "fftSize",
+                                    "value": "2048",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "frequencyRange",
+                                    "value": "full",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "smoothingTimeConstant",
+                                    "value": "0.8",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "enableHarmonicAnalysis",
+                                    "value": "false",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "enableSpectralAnalysis",
+                                    "value": "true",
+                                    "type": "text"
+                                }
+                            ]
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/overlap/analyze-frequency",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "overlap",
+                                "analyze-frequency"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Cross-Correlation Analysis",
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "audio",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "audio",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "correlationThreshold",
+                                    "value": "0.7",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "windowSize",
+                                    "value": "1024",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "hopSize",
+                                    "value": "512",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "enableNormalization",
+                                    "value": "true",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "enableTimeAlignment",
+                                    "value": "false",
+                                    "type": "text"
+                                }
+                            ]
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/overlap/cross-correlation",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "overlap",
+                                "cross-correlation"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get Overlap Job Status",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/overlap/status/{{request_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "overlap",
+                                "status",
+                                "{{request_id}}"
+                            ]
+                        }
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "Multi-Track Audio Handling",
+            "item": [
+                {
+                    "name": "Analyze Multi-Track",
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "audio",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "audio",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "audio",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "analysisTypes",
+                                    "value": "[\"silence\",\"overlap\",\"sync\"]",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "trackTypes",
+                                    "value": "[\"speech\",\"music\",\"effects\"]",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "submixRouting",
+                                    "value": "auto",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "silenceThreshold",
+                                    "value": "-30",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "overlapThreshold",
+                                    "value": "0.3",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "syncTolerance",
+                                    "value": "0.1",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "enableRealTimeProcessing",
+                                    "value": "true",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "enableSubmixRouting",
+                                    "value": "true",
+                                    "type": "text"
+                                }
+                            ]
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/multitrack/analyze",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "multitrack",
+                                "analyze"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Sync Tracks",
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "audio",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "audio",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "syncMethod",
+                                    "value": "auto",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "referenceTrack",
+                                    "value": "0",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "syncTolerance",
+                                    "value": "0.1",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "manualOffsets",
+                                    "value": "[]",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "enableMultiCamSync",
+                                    "value": "false",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "outputFormat",
+                                    "value": "mp3",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "quality",
+                                    "value": "high",
+                                    "type": "text"
+                                }
+                            ]
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/multitrack/sync",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "multitrack",
+                                "sync"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Configure Dynamic Ducking",
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "audio",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "audio",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "primaryTrack",
+                                    "value": "0",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "secondaryTracks",
+                                    "value": "[1]",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "duckingRatio",
+                                    "value": "0.3",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "attackTime",
+                                    "value": "0.01",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "releaseTime",
+                                    "value": "0.1",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "threshold",
+                                    "value": "-20",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "enableAutoDucking",
+                                    "value": "true",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "outputFormat",
+                                    "value": "mp3",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "quality",
+                                    "value": "high",
+                                    "type": "text"
+                                }
+                            ]
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/multitrack/ducking",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "multitrack",
+                                "ducking"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Configure Submix Routing",
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "audio",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "audio",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "submixGroups",
+                                    "value": "{\"main\":{\"tracks\":[0,1],\"gain\":1.0},\"speech\":{\"tracks\":[0],\"gain\":1.2},\"music\":{\"tracks\":[1],\"gain\":0.8}}",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "trackAssignments",
+                                    "value": "[{\"trackId\":0,\"submix\":\"speech\"},{\"trackId\":1,\"submix\":\"music\"}]",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "enableAutoRouting",
+                                    "value": "true",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "outputFormat",
+                                    "value": "mp3",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "quality",
+                                    "value": "high",
+                                    "type": "text"
+                                }
+                            ]
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/multitrack/submix",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "multitrack",
+                                "submix"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get Multi-Track Capabilities",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/multitrack/capabilities",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "multitrack",
+                                "capabilities"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get Multi-Track Job Status",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/multitrack/status/{{request_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "multitrack",
+                                "status",
+                                "{{request_id}}"
+                            ]
+                        }
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "Rhythm & Timing Correction",
+            "item": [
+                {
+                    "name": "Analyze Rhythm",
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "audio",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "analysisTypes",
+                                    "value": "[\"speech\",\"silence\",\"pacing\",\"flow\"]",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "timingTolerance",
+                                    "value": "150",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "enableGPTAnalysis",
+                                    "value": "true",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "enableFlowAnalysis",
+                                    "value": "true",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "enablePreciseTiming",
+                                    "value": "true",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "language",
+                                    "value": "en",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "confidenceThreshold",
+                                    "value": "0.7",
+                                    "type": "text"
+                                }
+                            ]
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/rhythm/analyze",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "rhythm",
+                                "analyze"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Apply Timing Corrections",
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "audio",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "corrections",
+                                    "value": "[{\"type\":\"long_pause\",\"timestamp\":8.2,\"originalDuration\":2.3,\"suggestedDuration\":1.0,\"confidence\":0.9,\"apply\":true}]",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "stretchAlgorithm",
+                                    "value": "phase_vocoder",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "timingTolerance",
+                                    "value": "150",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "enablePreciseTiming",
+                                    "value": "true",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "enableValidation",
+                                    "value": "true",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "outputFormat",
+                                    "value": "mp3",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "quality",
+                                    "value": "high",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "preserveOriginal",
+                                    "value": "true",
+                                    "type": "text"
+                                }
+                            ]
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/rhythm/correct",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "rhythm",
+                                "correct"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Generate Corrections",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"analysisResults\": {\n    \"speechRegions\": [\n      {\n        \"start\": 0.5,\n        \"end\": 8.2,\n        \"duration\": 7.7\n      }\n    ],\n    \"silenceRegions\": [\n      {\n        \"start\": 8.2,\n        \"end\": 10.5,\n        \"duration\": 2.3\n      }\n    ]\n  },\n  \"correctionTypes\": [\"long_pause\", \"short_segment\", \"pacing\"],\n  \"timingTolerance\": 150,\n  \"enableGPTAnalysis\": true,\n  \"confidenceThreshold\": 0.7,\n  \"maxCorrections\": 50\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/rhythm/generate-corrections",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "rhythm",
+                                "generate-corrections"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get Timing Algorithms",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/rhythm/algorithms",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "rhythm",
+                                "algorithms"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Preview Corrections",
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "audio",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "corrections",
+                                    "value": "[{\"type\":\"long_pause\",\"timestamp\":8.2,\"originalDuration\":2.3,\"suggestedDuration\":1.0,\"confidence\":0.9}]",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "stretchAlgorithm",
+                                    "value": "phase_vocoder",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "previewDuration",
+                                    "value": "30",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "previewStartTime",
+                                    "value": "0",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "outputFormat",
+                                    "value": "mp3",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "quality",
+                                    "value": "medium",
+                                    "type": "text"
+                                }
+                            ]
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/rhythm/preview",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "rhythm",
+                                "preview"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get Rhythm Job Status",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/rhythm/status/{{request_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "rhythm",
+                                "status",
+                                "{{request_id}}"
+                            ]
+                        }
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "Settings & Configuration",
+            "item": [
+                {
+                    "name": "Get Current Settings",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/settings",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "settings"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Update Settings",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"api\": {\n    \"openai\": {\n      \"apiKey\": \"sk-your-new-key\",\n      \"enabled\": true\n    }\n  },\n  \"processing\": {\n    \"processingQuality\": \"high\"\n  },\n  \"audio\": {\n    \"defaultFormat\": \"mp3\",\n    \"sampleRate\": 44100\n  }\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/settings",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "settings"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Export Settings",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"format\": \"json\",\n  \"includeSecrets\": false,\n  \"includeDefaults\": false\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/settings/export",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "settings",
+                                "export"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Import Settings",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"data\": {\n    \"api\": {\n      \"openai\": {\n        \"apiKey\": \"sk-new-key\",\n        \"enabled\": true\n      }\n    },\n    \"processing\": {\n      \"processingQuality\": \"high\"\n    }\n  },\n  \"format\": \"json\",\n  \"merge\": true,\n  \"validate\": true,\n  \"backup\": true\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/settings/import",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "settings",
+                                "import"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Reset Settings",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"sections\": [\"all\"],\n  \"backup\": true\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/settings/reset",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "settings",
+                                "reset"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Validate Settings",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/settings/validate",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "settings",
+                                "validate"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get Settings Schema",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/settings/schema",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "settings",
+                                "schema"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Test API Configuration",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"apiType\": \"all\",\n  \"timeout\": 10000\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/settings/test-api",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "settings",
+                                "test-api"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get Settings Backups",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/settings/backups",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "settings",
+                                "backups"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Restore Backup",
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/settings/restore/{{backup_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "settings",
+                                "restore",
+                                "{{backup_id}}"
+                            ]
+                        }
+                    },
+                    "response": []
+                }
+            ]
+        }
+    ],
+    "event": [
+        {
+            "listen": "prerequest",
+            "script": {
+                "type": "text/javascript",
+                "exec": [
+                    "// Set random request ID",
+                    "pm.environment.set('request_id', pm.variables.replaceIn('{{$randomUUID}}'));",
+                    "",
+                    "// Set timestamp",
+                    "pm.environment.set('timestamp', new Date().toISOString());"
+                ]
+            }
+        },
+        {
+            "listen": "test",
+            "script": {
+                "type": "text/javascript",
+                "exec": [
+                    "// Test response structure",
+                    "pm.test('Response is successful', function () {",
+                    "    pm.response.to.have.status(200);",
+                    "});",
+                    "",
+                    "pm.test('Response has success field', function () {",
+                    "    const jsonData = pm.response.json();",
+                    "    pm.expect(jsonData).to.have.property('success');",
+                    "    pm.expect(jsonData.success).to.be.true;",
+                    "});",
+                    "",
+                    "// Log response time",
+                    "pm.test('Response time is acceptable', function () {",
+                    "    pm.expect(pm.response.responseTime).to.be.below(30000); // 30 seconds",
+                    "    console.log('Response time: ' + pm.response.responseTime + 'ms');",
+                    "});"
+                ]
+            }
+        }
+    ]
+}

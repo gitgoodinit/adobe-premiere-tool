@@ -18,6 +18,14 @@ class AudioToolsPro {
         this.lastSilenceResults = [];
         this.currentAudioPath = null;
         
+        // Welcome screen management
+        this.welcomeScreen = null;
+        this.loadingSection = null;
+        this.getStartedBtn = null;
+        this.loadingProgress = 0;
+        this.loadingStartTime = null;
+        this.isLoading = false;
+        
         // Enhanced Features Integration
         this.enhancedFeatures = null;
         this.enhancedUI = null;
@@ -879,57 +887,261 @@ class AudioToolsPro {
     }
 
     // ========================================
+    // WELCOME SCREEN MANAGEMENT
+    // ========================================
+    
+    initializeWelcomeScreen() {
+        this.welcomeScreen = document.getElementById('welcomeScreen');
+        this.loadingSection = document.getElementById('loadingSection');
+        this.getStartedBtn = document.getElementById('getStartedBtn');
+        
+        if (!this.welcomeScreen) {
+            console.warn('Welcome screen element not found');
+            return;
+        }
+        
+        // Initialize progress ring
+        this.initializeProgressRing();
+        
+        // Setup get started button
+        if (this.getStartedBtn) {
+            this.getStartedBtn.addEventListener('click', () => this.startInitialization());
+        }
+        
+        this.log('🎬 Welcome screen initialized', 'info');
+    }
+    
+    showLoadingSection() {
+        if (this.loadingSection) {
+            this.loadingSection.style.display = 'block';
+            this.loadingSection.style.animation = 'loadingFadeIn 0.5s ease-out';
+        }
+        
+        // Hide features and actions
+        const featuresShowcase = document.querySelector('.features-showcase');
+        const welcomeActions = document.querySelector('.welcome-actions');
+        
+        if (featuresShowcase) {
+            featuresShowcase.style.display = 'none';
+        }
+        if (welcomeActions) {
+            welcomeActions.style.display = 'none';
+        }
+    }
+    
+    initializeProgressRing() {
+        const circle = document.getElementById('progressCircle');
+        if (circle) {
+            const radius = circle.r.baseVal.value; // Should be 50
+            const circumference = radius * 2 * Math.PI; // 50 * 2 * π = 314
+            circle.style.strokeDasharray = `${circumference} ${circumference}`;
+            circle.style.strokeDashoffset = circumference;
+        }
+    }
+    
+    async updateLoadingProgress(percentage, title, description) {
+        this.loadingProgress = percentage;
+        
+        const percentageElement = document.getElementById('progressPercent');
+        const circle = document.getElementById('progressCircle');
+        const statusElement = document.getElementById('loadingStatus');
+        const detailElement = document.getElementById('loadingDetail');
+        
+        if (percentageElement) {
+            percentageElement.textContent = `${percentage}%`;
+        }
+        
+        if (circle) {
+            const radius = circle.r.baseVal.value;
+            const circumference = radius * 2 * Math.PI;
+            const offset = circumference - (percentage / 100) * circumference;
+            circle.style.strokeDashoffset = offset;
+        }
+        
+        if (statusElement && title) {
+            statusElement.textContent = title;
+        }
+        
+        if (detailElement && description) {
+            detailElement.textContent = description;
+        }
+    }
+    
+    async updateLoadingStep(stepId, status) {
+        const step = document.querySelector(`[data-step="${stepId}"]`);
+        if (!step) return;
+        
+        // Remove all status classes
+        step.classList.remove('active', 'completed');
+        
+        // Add new status class
+        if (status === 'active' || status === 'completed') {
+            step.classList.add(status);
+        }
+        
+        // Update step status icon
+        const statusIcon = step.querySelector('.step-status i');
+        if (statusIcon) {
+            statusIcon.className = this.getStepStatusIcon(status);
+        }
+    }
+    
+    getStepStatusIcon(status) {
+        switch (status) {
+            case 'active':
+                return 'fas fa-spinner fa-spin';
+            case 'completed':
+                return 'fas fa-check';
+            default:
+                return 'fas fa-clock';
+        }
+    }
+    
+    
+    async completeLoading() {
+        await this.updateLoadingProgress(100, 'Ready!', 'Media Tools Pro is ready to use');
+        
+        // Wait a moment to show completion
+        await this.delay(1000);
+        
+        // Start fade out animation
+        if (this.welcomeScreen) {
+            this.welcomeScreen.style.opacity = '0';
+            this.welcomeScreen.style.transform = 'scale(0.95)';
+        }
+        
+        // Wait for animation to complete
+        await this.delay(500);
+        
+        // Hide welcome screen and show main app
+        if (this.welcomeScreen) {
+            this.welcomeScreen.style.display = 'none';
+        }
+        
+        const mainApp = document.getElementById('mainApp');
+        if (mainApp) {
+            mainApp.style.display = 'block';
+            mainApp.style.opacity = '0';
+            mainApp.style.transform = 'translateY(20px)';
+            
+            // Fade in main app
+            setTimeout(() => {
+                mainApp.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+                mainApp.style.opacity = '1';
+                mainApp.style.transform = 'translateY(0)';
+            }, 100);
+        }
+        
+        this.log('✅ Welcome screen completed, main interface shown', 'success');
+    }
+    
+    async handleLoadingError(error) {
+        await this.updateLoadingProgress(0, 'Error', 'Failed to initialize Media Tools Pro');
+        
+        // Show error in loading screen
+        const detailElement = document.getElementById('loadingDetail');
+        if (detailElement) {
+            detailElement.textContent = `Error: ${error.message}`;
+            detailElement.style.color = '#ef4444';
+        }
+        
+        // Wait a moment then show main app anyway
+        await this.delay(2000);
+        await this.completeLoading();
+    }
+    
+    delay(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    // ========================================
     // INITIALIZATION
     // ========================================
     
     async init() {
-        this.log('🚀 Media Tools Pro initializing...', 'info');
-        this.showUIMessage('🚀 Media Tools Pro starting up...', 'info');
+        try {
+            // Initialize welcome screen
+            this.initializeWelcomeScreen();
+            
+            this.log('🚀 Media Tools Pro ready - waiting for user to start', 'info');
+            
+        } catch (error) {
+            this.log(`❌ Welcome screen initialization failed: ${error.message}`, 'error');
+        }
+    }
+    
+    async startInitialization() {
+        if (this.isLoading) return;
         
-        // Debug: Check what's available
-        this.log(`🔍 Debug - typeof CSInterface: ${typeof CSInterface}`, 'info');
-        this.log(`🔍 Debug - window.CSInterface: ${typeof window.CSInterface}`, 'info');
-        this.log(`🔍 Debug - location: ${window.location.href}`, 'info');
+        this.isLoading = true;
         
-        // Check CEP environment
-        this.checkCEPEnvironment();
-        
-        // Setup UI components
-        this.setupUI();
-        this.setupEventListeners();
-        this.setupFeatureTabs();
-        this.setupAudioPlayer();
-        this.setupRealtimeText();
-        
-        // Setup enhanced overlap detection UI
-        this.setupEnhancedOverlapUI();
-        this.setupAudioPreviewTabs();
-        this.setupOverlapFilters();
-        
-        // Diagnostic button removed for cleaner UI
-        
-        // Initialize Enhanced Features
-        await this.initializeEnhancedFeatures();
-        
-        // Initialize Multi-Track System
-        this.initializeMultiTrackSystem();
-        
-        // Ensure multi-track interface is shown after a short delay
-        setTimeout(() => {
-            this.showMultiTrackInterface();
-        }, 500);
-        
-        // Load saved settings
-        this.loadSettings();
-        
-        // Update project info
-        await this.updateProjectInfo();
-        
-        this.showUIMessage('✅ Media Tools Pro ready!', 'success');
-        this.log('✅ Media Tools Pro initialized successfully', 'success');
-        
-        // Show current trim status
-        await this.showCurrentTrimStatus();
+        try {
+            this.log('🚀 Media Tools Pro initializing...', 'info');
+            
+            // Show loading section
+            this.showLoadingSection();
+            
+            // Step 1: Initialize Core
+            await this.updateLoadingStep(1, 'active');
+            await this.updateLoadingProgress(25, 'Core Engine', 'Initializing audio processing');
+            await this.delay(500);
+            await this.updateLoadingStep(1, 'completed');
+            
+            // Step 2: Check CEP environment
+            await this.updateLoadingStep(2, 'active');
+            await this.updateLoadingProgress(50, 'CEP Interface', 'Connecting to Premiere Pro');
+            this.checkCEPEnvironment();
+            await this.delay(800);
+            await this.updateLoadingStep(2, 'completed');
+            
+            // Step 3: Initialize Enhanced Features
+            await this.updateLoadingStep(3, 'active');
+            await this.updateLoadingProgress(75, 'AI Systems', 'Loading AI features');
+            await this.initializeEnhancedFeatures();
+            await this.delay(600);
+            await this.updateLoadingStep(3, 'completed');
+            
+            // Step 4: Setup UI components
+            await this.updateLoadingStep(4, 'active');
+            await this.updateLoadingProgress(100, 'Interface', 'Preparing UI components');
+            this.setupUI();
+            this.setupEventListeners();
+            this.setupFeatureTabs();
+            this.setupAudioPlayer();
+            this.setupRealtimeText();
+            
+            // Setup enhanced overlap detection UI
+            this.setupEnhancedOverlapUI();
+            this.setupAudioPreviewTabs();
+            this.setupOverlapFilters();
+            
+            // Initialize Multi-Track System
+            this.initializeMultiTrackSystem();
+            
+            // Load saved settings
+            this.loadSettings();
+            
+            // Update project info
+            await this.updateProjectInfo();
+            
+            await this.delay(400);
+            await this.updateLoadingStep(4, 'completed');
+            
+            this.log('✅ Media Tools Pro initialized successfully', 'success');
+            
+            // Complete loading and transition to main app
+            await this.completeLoading();
+            
+            // Ensure multi-track interface is shown after transition
+            setTimeout(() => {
+                this.showMultiTrackInterface();
+                this.showCurrentTrimStatus();
+            }, 500);
+            
+        } catch (error) {
+            this.log(`❌ Initialization failed: ${error.message}`, 'error');
+            await this.handleLoadingError(error);
+        }
     }
 
     checkCEPEnvironment() {
@@ -5545,7 +5757,8 @@ Format your response as JSON with this structure:
     toggleLogs() {
         const logsPanel = document.getElementById('logsPanel');
         if (logsPanel) {
-            logsPanel.classList.toggle('active');
+            const isActive = logsPanel.classList.toggle('active');
+            logsPanel.style.display = isActive ? 'block' : 'none';
         }
     }
     

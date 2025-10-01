@@ -5,8 +5,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Media Tools Pro</title>
+  <link rel="icon" type="image/png" href="public/icon/app_icon.png">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="enhanced-multitrack-styles.css">
+  <link rel="stylesheet" href="welcome-screen.css">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
   <!-- Enhanced UI Styles -->
   <link rel="stylesheet" href="./src/ui/enhanced-silence-results.css">
@@ -15,12 +17,205 @@
 </head>
 
 <body>
-  <div class="app-container">
+  <!-- Modern Welcome Screen -->
+  <div class="welcome-screen" id="welcomeScreen">
+    <!-- Animated Background -->
+    <div class="welcome-background">
+      <div class="bg-waves">
+        <div class="wave wave-1"></div>
+        <div class="wave wave-2"></div>
+        <div class="wave wave-3"></div>
+      </div>
+      <div class="bg-particles">
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+      </div>
+    </div>
+
+    <div class="welcome-container">
+      <!-- Main Logo Section -->
+      <div class="welcome-logo">
+        <div class="logo-wrapper">
+          <div class="logo-icon">
+            <div class="icon-ring"></div>
+            <div class="icon-core">
+              <img src="public/icon/app_icon.png" alt="App Icon" class="app-icon-img">
+            </div>
+            <div class="icon-glow"></div>
+          </div>
+          <div class="logo-text">
+            <h1 class="app-title">Media Tools Pro</h1>
+            <p class="app-subtitle">Professional Audio Processing for Adobe Premiere Pro</p>
+            <div class="version-info">
+              <span class="version-badge">Phase 1</span>
+              <span class="version-number">v1.0.0</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Features Showcase -->
+      <div class="features-showcase">
+        <div class="feature-grid">
+          <div class="feature-card">
+            <div class="feature-icon">
+              <i class="fas fa-volume-mute"></i>
+            </div>
+            <h3>Silence Detection</h3>
+            <p>AI-powered silence detection with automatic trimming</p>
+          </div>
+
+          <div class="feature-card">
+            <div class="feature-icon">
+              <i class="fas fa-wave-square"></i>
+            </div>
+            <h3>Overlap Detection</h3>
+            <p>Advanced frequency analysis for audio conflicts</p>
+          </div>
+
+          <div class="feature-card">
+            <div class="feature-icon">
+              <i class="fas fa-stream"></i>
+            </div>
+            <h3>Multi-Track Support</h3>
+            <p>Handle up to 6 audio tracks simultaneously</p>
+          </div>
+
+          <div class="feature-card">
+            <div class="feature-icon">
+              <i class="fas fa-brain"></i>
+            </div>
+            <h3>AI Enhancement</h3>
+            <p>Machine learning for intelligent audio processing</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Loading Progress (Hidden initially) -->
+      <div class="loading-section" id="loadingSection" style="display: none;">
+        <div class="loading-header">
+          <h2>Initializing Media Tools Pro</h2>
+          <p>Setting up your audio processing environment</p>
+        </div>
+
+        <div class="loading-progress">
+          <div class="progress-ring">
+            <svg width="120" height="120" viewBox="0 0 120 120">
+              <circle cx="60" cy="60" r="50" fill="transparent" stroke="rgba(255,255,255,0.1)" stroke-width="4" />
+              <circle id="progressCircle" cx="60" cy="60" r="50" fill="transparent" stroke="url(#progressGradient)"
+                stroke-width="4" stroke-linecap="round" stroke-dasharray="314" stroke-dashoffset="314" />
+              <defs>
+                <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" style="stop-color:#00d4ff;stop-opacity:1" />
+                  <stop offset="100%" style="stop-color:#00ff88;stop-opacity:1" />
+                </linearGradient>
+              </defs>
+            </svg>
+            <div class="progress-text">
+              <span id="progressPercent">0%</span>
+            </div>
+          </div>
+
+          <div class="loading-status">
+            <h3 id="loadingStatus">Ready to initialize</h3>
+            <p id="loadingDetail">Click "Get Started" to begin</p>
+          </div>
+        </div>
+
+        <div class="loading-steps">
+          <div class="step" data-step="1">
+            <div class="step-icon">
+              <i class="fas fa-microchip"></i>
+            </div>
+            <div class="step-info">
+              <span class="step-title">Core Engine</span>
+              <span class="step-desc">Loading audio processing</span>
+            </div>
+            <div class="step-status">
+              <i class="fas fa-clock"></i>
+            </div>
+          </div>
+
+          <div class="step" data-step="2">
+            <div class="step-icon">
+              <i class="fas fa-plug"></i>
+            </div>
+            <div class="step-info">
+              <span class="step-title">CEP Interface</span>
+              <span class="step-desc">Connecting to Premiere</span>
+            </div>
+            <div class="step-status">
+              <i class="fas fa-clock"></i>
+            </div>
+          </div>
+
+          <div class="step" data-step="3">
+            <div class="step-icon">
+              <i class="fas fa-brain"></i>
+            </div>
+            <div class="step-info">
+              <span class="step-title">AI Systems</span>
+              <span class="step-desc">Loading AI features</span>
+            </div>
+            <div class="step-status">
+              <i class="fas fa-clock"></i>
+            </div>
+          </div>
+
+          <div class="step" data-step="4">
+            <div class="step-icon">
+              <i class="fas fa-palette"></i>
+            </div>
+            <div class="step-info">
+              <span class="step-title">Interface</span>
+              <span class="step-desc">Preparing UI</span>
+            </div>
+            <div class="step-status">
+              <i class="fas fa-clock"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="welcome-actions">
+        <button class="get-started-btn" id="getStartedBtn">
+          <span class="btn-text">Get Started</span>
+          <span class="btn-icon">
+            <i class="fas fa-arrow-right"></i>
+          </span>
+        </button>
+
+        <div class="quick-info">
+          <div class="info-item">
+            <i class="fas fa-clock"></i>
+            <span>Quick Setup</span>
+          </div>
+          <div class="info-item">
+            <i class="fas fa-shield-alt"></i>
+            <span>Secure</span>
+          </div>
+          <div class="info-item">
+            <i class="fas fa-rocket"></i>
+            <span>Fast Processing</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="app-container" id="mainApp" style="display: none;">
     <!-- Header -->
     <header class="header">
       <div class="header-content">
         <div class="header-left">
-          <i class="fas fa-waveform-lines"></i>
+          <img src="public/icon/app_icon.png" alt="App Icon" class="header-app-icon">
           <h1>Media Tools Pro</h1>
           <span class="version-badge">Phase 1 - CEP</span>
         </div>
@@ -1075,7 +1270,7 @@
     </footer>
 
     <!-- Enhanced Logs Panel -->
-    <div class="logs-panel" id="logsPanel">
+    <div class="logs-panel" id="logsPanel" style="display: none;">
       <div class="logs-header">
         <div class="logs-title">
           <h3><i class="fas fa-terminal"></i> Debug Console</h3>

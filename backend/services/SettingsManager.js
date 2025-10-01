@@ -1,0 +1,693 @@
+/**
+ * Settings Manager Service
+ * Handles application settings and configuration management
+ */
+
+const fs = require('fs');
+const path = require('path');
+const { v4: uuidv4 } = require('uuid');
+
+const Logger = require('./Logger');
+
+class SettingsManager {
+    constructor() {
+        this.logger = new Logger();
+        this.settingsPath = path.join(__dirname, '../config/settings.json');
+        this.backupsPath = path.join(__dirname, '../config/backups');
+        this.settings = null;
+        this.isInitialized = false;
+    }
+
+    async initialize() {
+        try {
+            this.logger.info('Initializing Settings Manager...');
+            
+            // Create config directory if it doesn't exist
+            const configDir = path.dirname(this.settingsPath);
+            if (!fs.existsSync(configDir)) {
+                fs.mkdirSync(configDir, { recursive: true });
+            }
+
+            // Create backups directory if it doesn't exist
+            if (!fs.existsSync(this.backupsPath)) {
+                fs.mkdirSync(this.backupsPath, { recursive: true });
+            }
+
+            // Load settings
+            await this.loadSettings();
+            
+            this.isInitialized = true;
+            this.logger.info('Settings Manager initialized successfully');
+            
+        } catch (error) {
+            this.logger.error('Failed to initialize Settings Manager:', error);
+            throw error;
+        }
+    }
+
+    async loadSettings() {
+        try {
+            if (fs.existsSync(this.settingsPath)) {
+                const data = fs.readFileSync(this.settingsPath, 'utf8');
+                this.settings = JSON.parse(data);
+                this.logger.info('Settings loaded from file');
+            } else {
+                this.settings = this.getDefaultSettings();
+                await this.saveSettings();
+                this.logger.info('Default settings created');
+            }
+        } catch (error) {
+            this.logger.error('Failed to load settings:', error);
+            this.settings = this.getDefaultSettings();
+        }
+    }
+
+    async saveSettings() {
+        try {
+            this.settings.lastUpdated = new Date().toISOString();
+            this.settings.version = '1.0.0';
+            
+            fs.writeFileSync(this.settingsPath, JSON.stringify(this.settings, null, 2));
+            this.logger.debug('Settings saved to file');
+        } catch (error) {
+            this.logger.error('Failed to save settings:', error);
+            throw error;
+        }
+    }
+
+    getDefaultSettings() {
+        return {
+            version: '1.0.0',
+            lastUpdated: new Date().toISOString(),
+            environment: process.env.NODE_ENV || 'development',
+            
+            api: {
+                openai: {
+                    apiKey: process.env.OPENAI_API_KEY || '',
+                    model: 'gpt-4o-mini',
+                    baseURL: 'https://api.openai.com/v1',
+                    maxTokens: 2000,
+                    temperature: 0.3,
+                    enabled: false
+                },
+                google: {
+                    apiKey: process.env.GOOGLE_CLOUD_API_KEY || '',
+                    endpoint: 'https://speech.googleapis.com/v1/speech:recognize',
+                    model: 'latest_long',
+                    enabled: false
+                }
+            },
+            
+            processing: {
+                audioBufferSize: 4096,
+                processingQuality: 'high',
+                enableRealtimePreview: true,
+                enableVisualFeedback: true,
+                useCEPProcess: false,
+                maxFileSize: 104857600, // 100MB
+                maxFilesPerRequest: 10
+            },
+            
+            audio: {
+                defaultFormat: 'mp3',
+                defaultQuality: 'high',
+                sampleRate: 44100,
+                channels: 2,
+                bitRate: '192k',
+                silenceThreshold: -30,
+                minSilenceDuration: 0.5,
+                overlapThreshold: 0.3,
+                timingTolerance: 150
+            },
+            
+            ui: {
+                theme: 'dark',
+                language: 'en',
+                enableDebugConsole: process.env.NODE_ENV === 'development',
+                logLevel: process.env.LOG_LEVEL || 'info',
+                enableHotReload: process.env.NODE_ENV === 'development'
+            },
+            
+            advanced: {
+                enableDebugMode: process.env.NODE_ENV === 'development',
+                enableMockAPIs: process.env.NODE_ENV === 'development',
+                enableMockFFmpeg: process.env.NODE_ENV === 'development',
+                cacheTTL: 3600,
+                rateLimitWindow: 900000, // 15 minutes
+                rateLimitMax: 100,
+                enableMetrics: true,
+                metricsPort: 9090
+            }
+        };
+    }
+
+    async getSettings() {
+        if (!this.isInitialized) {
+            await this.initialize();
+        }
+        return { ...this.settings };
+    }
+
+    async updateSettings(newSettings) {
+        if (!this.isInitialized) {
+            await this.initialize();
+        }
+
+        try {
+            // Merge new settings with existing settings
+            this.settings = this.mergeSettings(this.settings, newSettings);
+            
+            // Validate settings
+            const validation = this.validateSettings(this.settings);
+            if (!validation.isValid) {
+                throw new Error(`Settings validation failed: ${validation.errors.join(', ')}`);
+            }
+            
+            // Save settings
+            await this.saveSettings();
+            
+            this.logger.info('Settings updated successfully');
+            return { ...this.settings };
+            
+        } catch (error) {
+            this.logger.error('Failed to update settings:', error);
+            throw error;
+        }
+    }
+
+    mergeSettings(existing, newSettings) {
+        const merged = { ...existing };
+        
+        Object.keys(newSettings).forEach(key => {
+            if (typeof newSettings[key] === 'object' && newSettings[key] !== null && !Array.isArray(newSettings[key])) {
+                merged[key] = { ...merged[key], ...newSettings[key] };
+            } else {
+                merged[key] = newSettings[key];
+            }
+        });
+        
+        return merged;
+    }
+
+    validateSettings(settings) {
+        const errors = [];
+        const warnings = [];
+        
+        // Validate API settings
+        if (settings.api?.openai?.apiKey && !settings.api.openai.apiKey.startsWith('sk-')) {
+            errors.push('Invalid OpenAI API key format');
+        }
+        
+        if (settings.api?.google?.apiKey && !settings.api.google.apiKey.startsWith('AIza')) {
+            errors.push('Invalid Google Cloud API key format');
+        }
+        
+        // Validate processing settings
+        if (settings.processing?.audioBufferSize && (settings.processing.audioBufferSize < 512 || settings.processing.audioBufferSize > 16384)) {
+            errors.push('Audio buffer size must be between 512 and 16384');
+        }
+        
+        if (settings.processing?.maxFileSize && settings.processing.maxFileSize > 500 * 1024 * 1024) {
+            warnings.push('Maximum file size is very large (500MB+)');
+        }
+        
+        // Validate audio settings
+        if (settings.audio?.sampleRate && ![22050, 44100, 48000, 96000].includes(settings.audio.sampleRate)) {
+            errors.push('Invalid sample rate');
+        }
+        
+        if (settings.audio?.channels && (settings.audio.channels < 1 || settings.audio.channels > 8)) {
+            errors.push('Invalid number of channels');
+        }
+        
+        // Calculate validation score
+        const totalChecks = 10;
+        const errorCount = errors.length;
+        const warningCount = warnings.length;
+        const score = Math.max(0, Math.round(((totalChecks - errorCount - warningCount * 0.5) / totalChecks) * 100));
+        
+        return {
+            isValid: errors.length === 0,
+            errors,
+            warnings,
+            score
+        };
+    }
+
+    async exportSettings(options = {}) {
+        const {
+            format = 'json',
+            includeSecrets = false,
+            includeDefaults = false
+        } = options;
+
+        try {
+            let settings = { ...this.settings };
+            
+            // Remove secrets if not requested
+            if (!includeSecrets) {
+                if (settings.api?.openai?.apiKey) {
+                    settings.api.openai.apiKey = 'sk-***';
+                }
+                if (settings.api?.google?.apiKey) {
+                    settings.api.google.apiKey = 'AIza***';
+                }
+            }
+            
+            // Remove defaults if not requested
+            if (!includeDefaults) {
+                const defaults = this.getDefaultSettings();
+                settings = this.removeDefaults(settings, defaults);
+            }
+            
+            let data;
+            let mimeType;
+            
+            switch (format) {
+                case 'json':
+                    data = JSON.stringify(settings, null, 2);
+                    mimeType = 'application/json';
+                    break;
+                case 'yaml':
+                    // In a real implementation, you'd use a YAML library
+                    data = JSON.stringify(settings, null, 2);
+                    mimeType = 'text/yaml';
+                    break;
+                case 'env':
+                    data = this.convertToEnvFormat(settings);
+                    mimeType = 'text/plain';
+                    break;
+                default:
+                    throw new Error(`Unsupported export format: ${format}`);
+            }
+            
+            return {
+                data,
+                format,
+                mimeType,
+                exportedAt: new Date().toISOString(),
+                version: settings.version,
+                size: Buffer.byteLength(data, 'utf8')
+            };
+            
+        } catch (error) {
+            this.logger.error('Failed to export settings:', error);
+            throw error;
+        }
+    }
+
+    async importSettings(data, options = {}) {
+        const {
+            format = 'json',
+            merge = true,
+            validate = true,
+            backup = true
+        } = options;
+
+        try {
+            let importedSettings;
+            
+            // Parse data based on format
+            switch (format) {
+                case 'json':
+                    importedSettings = typeof data === 'string' ? JSON.parse(data) : data;
+                    break;
+                case 'yaml':
+                    // In a real implementation, you'd use a YAML library
+                    importedSettings = typeof data === 'string' ? JSON.parse(data) : data;
+                    break;
+                case 'env':
+                    importedSettings = this.parseEnvFormat(data);
+                    break;
+                default:
+                    throw new Error(`Unsupported import format: ${format}`);
+            }
+            
+            // Validate imported settings
+            if (validate) {
+                const validation = this.validateSettings(importedSettings);
+                if (!validation.isValid) {
+                    throw new Error(`Imported settings validation failed: ${validation.errors.join(', ')}`);
+                }
+            }
+            
+            // Create backup if requested
+            let backupCreated = false;
+            if (backup) {
+                await this.createBackup();
+                backupCreated = true;
+            }
+            
+            // Apply settings
+            if (merge) {
+                this.settings = this.mergeSettings(this.settings, importedSettings);
+            } else {
+                this.settings = { ...this.getDefaultSettings(), ...importedSettings };
+            }
+            
+            await this.saveSettings();
+            
+            this.logger.info('Settings imported successfully');
+            
+            return {
+                imported: true,
+                skipped: false,
+                errors: [],
+                backupCreated,
+                settings: { ...this.settings }
+            };
+            
+        } catch (error) {
+            this.logger.error('Failed to import settings:', error);
+            throw error;
+        }
+    }
+
+    async resetSettings(options = {}) {
+        const {
+            sections = ['all'],
+            backup = true
+        } = options;
+
+        try {
+            // Create backup if requested
+            let backupCreated = false;
+            if (backup) {
+                await this.createBackup();
+                backupCreated = true;
+            }
+            
+            const defaultSettings = this.getDefaultSettings();
+            
+            if (sections.includes('all')) {
+                this.settings = defaultSettings;
+            } else {
+                sections.forEach(section => {
+                    if (defaultSettings[section]) {
+                        this.settings[section] = { ...defaultSettings[section] };
+                    }
+                });
+            }
+            
+            await this.saveSettings();
+            
+            this.logger.info(`Settings reset for sections: ${sections.join(', ')}`);
+            
+            return {
+                sectionsReset: sections,
+                backupCreated,
+                defaultSettings: { ...defaultSettings },
+                settings: { ...this.settings }
+            };
+            
+        } catch (error) {
+            this.logger.error('Failed to reset settings:', error);
+            throw error;
+        }
+    }
+
+    async createBackup() {
+        try {
+            const backupId = uuidv4();
+            const backupPath = path.join(this.backupsPath, `settings_${backupId}.json`);
+            
+            const backup = {
+                id: backupId,
+                name: `Settings Backup ${new Date().toISOString()}`,
+                createdAt: new Date().toISOString(),
+                version: this.settings.version,
+                settings: { ...this.settings }
+            };
+            
+            fs.writeFileSync(backupPath, JSON.stringify(backup, null, 2));
+            
+            this.logger.info(`Settings backup created: ${backupId}`);
+            return backupId;
+            
+        } catch (error) {
+            this.logger.error('Failed to create settings backup:', error);
+            throw error;
+        }
+    }
+
+    async getBackups() {
+        try {
+            const files = fs.readdirSync(this.backupsPath);
+            const backups = [];
+            
+            files.forEach(file => {
+                if (file.endsWith('.json')) {
+                    try {
+                        const data = fs.readFileSync(path.join(this.backupsPath, file), 'utf8');
+                        const backup = JSON.parse(data);
+                        const stats = fs.statSync(path.join(this.backupsPath, file));
+                        
+                        backups.push({
+                            id: backup.id,
+                            name: backup.name,
+                            createdAt: backup.createdAt,
+                            size: stats.size,
+                            description: `Backup from ${backup.createdAt}`,
+                            version: backup.version
+                        });
+                    } catch (error) {
+                        this.logger.warn(`Failed to read backup file ${file}:`, error);
+                    }
+                }
+            });
+            
+            return backups.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+            
+        } catch (error) {
+            this.logger.error('Failed to get backups:', error);
+            return [];
+        }
+    }
+
+    async restoreBackup(backupId) {
+        try {
+            const backupPath = path.join(this.backupsPath, `settings_${backupId}.json`);
+            
+            if (!fs.existsSync(backupPath)) {
+                throw new Error(`Backup not found: ${backupId}`);
+            }
+            
+            const data = fs.readFileSync(backupPath, 'utf8');
+            const backup = JSON.parse(data);
+            
+            // Create current backup before restoring
+            await this.createBackup();
+            
+            // Restore settings
+            this.settings = { ...backup.settings };
+            await this.saveSettings();
+            
+            this.logger.info(`Settings restored from backup: ${backupId}`);
+            
+            return {
+                restored: true,
+                backupInfo: {
+                    id: backup.id,
+                    name: backup.name,
+                    createdAt: backup.createdAt,
+                    version: backup.version
+                },
+                settings: { ...this.settings }
+            };
+            
+        } catch (error) {
+            this.logger.error('Failed to restore backup:', error);
+            throw error;
+        }
+    }
+
+    getSettingsSchema() {
+        return {
+            version: '1.0.0',
+            lastUpdated: new Date().toISOString(),
+            
+            api: {
+                openai: {
+                    apiKey: { type: 'string', required: false, format: 'api_key' },
+                    model: { type: 'string', required: false, default: 'gpt-4o-mini' },
+                    enabled: { type: 'boolean', required: false, default: false }
+                },
+                google: {
+                    apiKey: { type: 'string', required: false, format: 'api_key' },
+                    enabled: { type: 'boolean', required: false, default: false }
+                }
+            },
+            
+            processing: {
+                audioBufferSize: { type: 'number', required: false, min: 512, max: 16384, default: 4096 },
+                processingQuality: { type: 'string', required: false, enum: ['low', 'medium', 'high'], default: 'high' },
+                maxFileSize: { type: 'number', required: false, min: 1048576, max: 524288000, default: 104857600 }
+            },
+            
+            audio: {
+                defaultFormat: { type: 'string', required: false, enum: ['mp3', 'wav', 'm4a', 'ogg'], default: 'mp3' },
+                sampleRate: { type: 'number', required: false, enum: [22050, 44100, 48000, 96000], default: 44100 },
+                channels: { type: 'number', required: false, min: 1, max: 8, default: 2 }
+            },
+            
+            ui: {
+                theme: { type: 'string', required: false, enum: ['light', 'dark'], default: 'dark' },
+                language: { type: 'string', required: false, default: 'en' },
+                logLevel: { type: 'string', required: false, enum: ['error', 'warn', 'info', 'debug', 'verbose'], default: 'info' }
+            },
+            
+            advanced: {
+                enableDebugMode: { type: 'boolean', required: false, default: false },
+                cacheTTL: { type: 'number', required: false, min: 60, max: 86400, default: 3600 },
+                rateLimitMax: { type: 'number', required: false, min: 10, max: 1000, default: 100 }
+            }
+        };
+    }
+
+    async testAPIConfiguration(options = {}) {
+        const {
+            apiType = 'all',
+            timeout = 10000
+        } = options;
+
+        const results = {
+            openai: { available: false, error: null },
+            google: { available: false, error: null },
+            overall: { available: false, error: null }
+        };
+
+        let totalTests = 0;
+        let passed = 0;
+
+        // Test OpenAI API
+        if (apiType === 'all' || apiType === 'openai') {
+            totalTests++;
+            try {
+                if (this.settings.api?.openai?.apiKey && this.settings.api.openai.enabled) {
+                    // In a real implementation, you'd make an actual API call
+                    results.openai = { available: true, error: null };
+                    passed++;
+                } else {
+                    results.openai = { available: false, error: 'API key not configured or disabled' };
+                }
+            } catch (error) {
+                results.openai = { available: false, error: error.message };
+            }
+        }
+
+        // Test Google Cloud API
+        if (apiType === 'all' || apiType === 'google') {
+            totalTests++;
+            try {
+                if (this.settings.api?.google?.apiKey && this.settings.api.google.enabled) {
+                    // In a real implementation, you'd make an actual API call
+                    results.google = { available: true, error: null };
+                    passed++;
+                } else {
+                    results.google = { available: false, error: 'API key not configured or disabled' };
+                }
+            } catch (error) {
+                results.google = { available: false, error: error.message };
+            }
+        }
+
+        // Calculate overall results
+        results.overall = {
+            available: passed === totalTests,
+            error: passed === totalTests ? null : `${totalTests - passed} API(s) failed`
+        };
+
+        return {
+            ...results,
+            totalTests,
+            passed,
+            failed: totalTests - passed,
+            successRate: totalTests > 0 ? (passed / totalTests) * 100 : 0
+        };
+    }
+
+    // Helper methods
+    removeDefaults(settings, defaults) {
+        const cleaned = {};
+        
+        Object.keys(settings).forEach(key => {
+            if (typeof settings[key] === 'object' && settings[key] !== null && !Array.isArray(settings[key])) {
+                if (defaults[key]) {
+                    const cleanedNested = this.removeDefaults(settings[key], defaults[key]);
+                    if (Object.keys(cleanedNested).length > 0) {
+                        cleaned[key] = cleanedNested;
+                    }
+                } else {
+                    cleaned[key] = settings[key];
+                }
+            } else if (settings[key] !== defaults[key]) {
+                cleaned[key] = settings[key];
+            }
+        });
+        
+        return cleaned;
+    }
+
+    convertToEnvFormat(settings) {
+        const lines = [];
+        
+        Object.keys(settings).forEach(section => {
+            if (typeof settings[section] === 'object' && settings[section] !== null) {
+                Object.keys(settings[section]).forEach(key => {
+                    const value = settings[section][key];
+                    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+                        lines.push(`${section.toUpperCase()}_${key.toUpperCase()}=${value}`);
+                    }
+                });
+            }
+        });
+        
+        return lines.join('\n');
+    }
+
+    parseEnvFormat(data) {
+        const settings = {};
+        const lines = data.split('\n');
+        
+        lines.forEach(line => {
+            const [key, value] = line.split('=');
+            if (key && value) {
+                const [section, setting] = key.toLowerCase().split('_');
+                if (!settings[section]) {
+                    settings[section] = {};
+                }
+                settings[section][setting] = value;
+            }
+        });
+        
+        return settings;
+    }
+
+    async cleanup() {
+        try {
+            this.logger.info('Cleaning up Settings Manager...');
+            
+            // Clean up old backups (older than 30 days)
+            const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+            const backups = await this.getBackups();
+            
+            backups.forEach(backup => {
+                if (new Date(backup.createdAt) < thirtyDaysAgo) {
+                    const backupPath = path.join(this.backupsPath, `settings_${backup.id}.json`);
+                    if (fs.existsSync(backupPath)) {
+                        fs.unlinkSync(backupPath);
+                        this.logger.debug(`Deleted old backup: ${backup.id}`);
+                    }
+                }
+            });
+            
+            this.isInitialized = false;
+            this.logger.info('Settings Manager cleanup completed');
+            
+        } catch (error) {
+            this.logger.error('Settings Manager cleanup failed:', error);
+        }
+    }
+}
+
+module.exports = SettingsManager;

@@ -1,0 +1,58 @@
+{
+  "version": "1.0.0",
+  "lastUpdated": "2025-10-01T11:25:33.936Z",
+  "environment": "development",
+  "api": {
+    "openai": {
+      "apiKey": "",
+      "model": "gpt-4o-mini",
+      "baseURL": "https://api.openai.com/v1",
+      "maxTokens": 2000,
+      "temperature": 0.3,
+      "enabled": false
+    },
+    "google": {
+      "apiKey": "",
+      "endpoint": "https://speech.googleapis.com/v1/speech:recognize",
+      "model": "latest_long",
+      "enabled": false
+    }
+  },
+  "processing": {
+    "audioBufferSize": 4096,
+    "processingQuality": "high",
+    "enableRealtimePreview": true,
+    "enableVisualFeedback": true,
+    "useCEPProcess": false,
+    "maxFileSize": 104857600,
+    "maxFilesPerRequest": 10
+  },
+  "audio": {
+    "defaultFormat": "mp3",
+    "defaultQuality": "high",
+    "sampleRate": 44100,
+    "channels": 2,
+    "bitRate": "192k",
+    "silenceThreshold": -30,
+    "minSilenceDuration": 0.5,
+    "overlapThreshold": 0.3,
+    "timingTolerance": 150
+  },
+  "ui": {
+    "theme": "dark",
+    "language": "en",
+    "enableDebugConsole": false,
+    "logLevel": "info",
+    "enableHotReload": false
+  },
+  "advanced": {
+    "enableDebugMode": false,
+    "enableMockAPIs": false,
+    "enableMockFFmpeg": false,
+    "cacheTTL": 3600,
+    "rateLimitWindow": 900000,
+    "rateLimitMax": 100,
+    "enableMetrics": true,
+    "metricsPort": 9090
+  }
+}
