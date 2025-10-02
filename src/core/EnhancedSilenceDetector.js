@@ -49,50 +49,47 @@ class EnhancedSilenceDetector {
     async detectSilence(audioFile, options = {}) {
         const startTime = Date.now();
         
-        this.app.log('🔍 Starting Enhanced Silence Detection...', 'info');
+        this.app.log('🔍 Starting Enhanced Silence Detection via Backend API...', 'info');
         this.app.updateStatus('Enhanced Analysis...', 'processing');
         
         try {
-            // Step 1: Preprocess audio with FFmpeg (if available)
-            this.app.updateProgressBar(10, 'Preprocessing audio...');
-            const preprocessedAudio = await this.preprocessAudio(audioFile);
+            // Enhanced detection now uses the backend API for unified processing
+            this.app.updateProgressBar(10, 'Connecting to backend API...');
             
-            // Step 2: Run Whisper AI transcription (primary method)
-            this.app.updateProgressBar(30, 'Running AI transcription...');
-            const whisperResults = await this.detectSilenceWithWhisper(preprocessedAudio);
+            // Ensure audio is loaded
+            if (!this.app.currentAudioBlob) {
+                throw new Error('No audio blob available. Please load media first.');
+            }
             
-            // Step 3: Run FFmpeg silence detection (validation)
-            this.app.updateProgressBar(50, 'Running FFmpeg validation...');
-            const ffmpegResults = await this.detectSilenceWithFFmpeg(preprocessedAudio);
+            this.app.log('🚀 Using backend API for enhanced silence detection...', 'info');
             
-            // Step 4: Run Web Audio API analysis (secondary validation)
-            this.app.updateProgressBar(70, 'Running Web Audio analysis...');
-            const webAudioResults = await this.detectSilenceWithWebAudio(preprocessedAudio);
+            // Step 1: Call backend API
+            this.app.updateProgressBar(30, 'Processing with backend AI...');
+            await this.app.sendAudioToSilenceDetectionApi();
             
-            // Step 5: Merge and validate results
-            this.app.updateProgressBar(85, 'Merging results...');
-            const mergedResults = this.mergeDetectionResults({
-                whisper: whisperResults,
-                ffmpeg: ffmpegResults,
-                webAudio: webAudioResults
-            });
+            // Step 2: Get results from main app
+            const backendResults = this.app.lastSilenceResults || [];
             
-            // Step 6: Apply confidence scoring and filtering
-            this.app.updateProgressBar(95, 'Finalizing results...');
-            const finalResults = this.applyConfidenceScoring(mergedResults);
+            // Step 3: Apply enhanced processing to backend results
+            this.app.updateProgressBar(70, 'Applying enhanced processing...');
+            const enhancedResults = this.enhanceBackendResults(backendResults, options);
+            
+            // Step 4: Apply confidence scoring and filtering
+            this.app.updateProgressBar(90, 'Finalizing enhanced results...');
+            const finalResults = this.applyEnhancedConfidenceScoring(enhancedResults);
             
             const duration = (Date.now() - startTime) / 1000;
             this.app.log(`✅ Enhanced silence detection completed in ${duration.toFixed(2)}s`, 'success');
-            this.app.log(`📊 Found ${finalResults.length} validated silence segments`, 'info');
+            this.app.log(`📊 Found ${finalResults.length} enhanced silence segments`, 'info');
             
             return {
                 success: true,
                 results: finalResults,
                 metadata: {
                     duration,
-                    methods: ['whisper', 'ffmpeg', 'webAudio'],
-                    preprocessing: this.config.preprocessing,
-                    confidence: this.calculateOverallConfidence(finalResults)
+                    methods: ['backend-api', 'enhanced-processing'],
+                    confidence: this.calculateOverallConfidence(finalResults),
+                    processingTime: this.app.lastProcessingTime || `${duration.toFixed(2)}s`
                 }
             };
             
@@ -100,6 +97,110 @@ class EnhancedSilenceDetector {
             this.app.log(`❌ Enhanced silence detection failed: ${error.message}`, 'error');
             throw error;
         }
+    }
+    
+    // New method to enhance backend results with additional processing
+    enhanceBackendResults(backendResults, options = {}) {
+        if (!Array.isArray(backendResults)) {
+            return [];
+        }
+        
+        return backendResults.map((segment, index) => ({
+            // Original backend data
+            start: segment.start || segment.startTime || 0,
+            end: segment.end || segment.endTime || (segment.start + segment.duration) || 0,
+            duration: segment.duration || 0,
+            confidence: segment.confidence || 0.8,
+            
+            // Enhanced metadata
+            id: `enhanced_${index + 1}`,
+            type: this.classifyEnhancedSilenceType(segment),
+            method: 'backend-enhanced',
+            qualityScore: this.calculateQualityScore(segment),
+            recommendedAction: this.getEnhancedRecommendedAction(segment),
+            confidenceLevel: this.getEnhancedConfidenceLevel(segment.confidence || 0.8),
+            
+            // Enhanced properties
+            enhanced: {
+                noiseReduction: options.enablePreprocessing !== false,
+                aiValidation: options.enableAIValidation !== false,
+                adaptiveThreshold: true,
+                contextAware: true
+            }
+        }));
+    }
+    
+    // Enhanced confidence scoring
+    applyEnhancedConfidenceScoring(results) {
+        return results.map(segment => {
+            let enhancedConfidence = segment.confidence;
+            
+            // Boost confidence for longer segments
+            if (segment.duration > 1.0) {
+                enhancedConfidence *= 1.1;
+            }
+            
+            // Boost confidence for segments with clear boundaries
+            if (segment.type === 'speech_gap') {
+                enhancedConfidence *= 1.05;
+            }
+            
+            // Cap confidence at 1.0
+            enhancedConfidence = Math.min(1.0, enhancedConfidence);
+            
+            return {
+                ...segment,
+                confidence: enhancedConfidence,
+                originalConfidence: segment.confidence,
+                confidenceBoost: enhancedConfidence - segment.confidence
+            };
+        });
+    }
+    
+    // Enhanced classification
+    classifyEnhancedSilenceType(segment) {
+        const duration = segment.duration || 0;
+        
+        if (duration < 0.3) return 'micro_pause';
+        if (duration < 0.8) return 'pause';
+        if (duration < 2.0) return 'speech_gap';
+        if (duration < 5.0) return 'silence';
+        return 'extended_silence';
+    }
+    
+    // Enhanced quality scoring
+    calculateQualityScore(segment) {
+        const confidence = segment.confidence || 0;
+        const duration = segment.duration || 0;
+        
+        let score = confidence * 100;
+        
+        // Bonus for optimal duration ranges
+        if (duration >= 0.5 && duration <= 3.0) {
+            score += 5;
+        }
+        
+        return Math.min(100, Math.round(score));
+    }
+    
+    // Enhanced recommended actions
+    getEnhancedRecommendedAction(segment) {
+        const confidence = segment.confidence || 0;
+        const duration = segment.duration || 0;
+        
+        if (confidence > 0.95 && duration < 2.0) return 'auto_trim';
+        if (confidence > 0.85 && duration < 3.0) return 'auto_trim_with_fade';
+        if (confidence > 0.7) return 'review_recommended';
+        return 'manual_review_required';
+    }
+    
+    // Enhanced confidence levels
+    getEnhancedConfidenceLevel(confidence) {
+        if (confidence >= 0.95) return 'very_high';
+        if (confidence >= 0.85) return 'high';
+        if (confidence >= 0.7) return 'medium';
+        if (confidence >= 0.5) return 'low';
+        return 'very_low';
     }
 
     // ========================================

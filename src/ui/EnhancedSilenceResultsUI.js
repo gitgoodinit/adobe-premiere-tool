@@ -363,10 +363,11 @@ class EnhancedSilenceResultsUI {
             document.getElementById('aiConfidence').textContent = `${overallConfidence}%`;
         }
         
-        // Update processing time (mock for now)
+        // Update processing time with actual backend response time
         if (document.getElementById('processingTime')) {
-            const mockTime = Math.floor(Math.random() * 500) + 100; // 100-600ms
-            document.getElementById('processingTime').textContent = `${mockTime}ms`;
+            // Use actual processing time from backend API if available
+            const processingTime = this.app?.lastProcessingTime || 'N/A';
+            document.getElementById('processingTime').textContent = processingTime;
         }
     }
 

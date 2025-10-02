@@ -1,0 +1,7 @@
+{
+  "platform": "win32",
+  "executable": "ffmpeg.exe",
+  "path": "ffmpeg.exe",
+  "verified": true,
+  "setupDate": "2025-10-02T07:54:45.328Z"
+}

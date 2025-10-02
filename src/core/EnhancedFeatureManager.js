@@ -153,9 +153,9 @@ class EnhancedFeatureManager {
 
     setupEnhancedEventListeners() {
         // Enhanced Silence Detection
-        document.getElementById('detectSilence')?.addEventListener('click', () => {
-            this.runEnhancedSilenceDetectionWorkflow();
-        });
+
+        
+        console.log('🔧 EnhancedFeatureManager: Event listeners setup (detectSilence handled elsewhere)');
 
         // Enhanced Overlap Detection
         document.getElementById('detectOverlaps')?.addEventListener('click', () => {

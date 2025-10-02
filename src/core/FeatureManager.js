@@ -146,9 +146,9 @@ class FeatureManager {
 
     setupEventListeners() {
         // UI Event Listeners for Feature 1
-        document.getElementById('detectSilence')?.addEventListener('click', () => {
-            this.runSilenceDetectionWorkflow();
-        });
+
+        
+        console.log('� FeatureManager: Event listeners setup (detectSilence handled elsewhere)');
 
         // Advanced workflow listeners (if available)
         if (this.premiereIntegration) {
@@ -171,7 +171,16 @@ class FeatureManager {
     // ========================================
 
     async runSilenceDetectionWorkflow(options = {}) {
+        // 🎯 ENHANCED CONSOLE LOGGING: Workflow start
+        console.log('\n🚀 =================================');
+        console.log('🚀 SILENCE DETECTION WORKFLOW START');
+        console.log('🚀 =================================');
+        console.log(`   - Workflow options:`, options);
+        console.log(`   - Processing status: ${this.isProcessing}`);
+        console.log(`   - Workflow settings:`, this.workflowSettings);
+        
         if (this.isProcessing) {
+            console.log('⚠️ Workflow already in progress - aborting');
             this.app.log('⚠️ Workflow already in progress', 'warning');
             return;
         }
@@ -179,20 +188,28 @@ class FeatureManager {
         this.isProcessing = true;
         const workflowId = `workflow_${Date.now()}`;
         
+        console.log(`🆔 Workflow ID: ${workflowId}`);
+        console.log('🎯 Backend API integration - no mock responses allowed!');
+        
         this.app.log('🚀 Starting Silence Detection & Trimming workflow...', 'info');
         this.app.updateStatus('Starting Workflow...', 'processing');
         this.app.updateProgressBar(0, 'Initializing...');
 
         try {
             // Step 1: Get active audio from Premiere Pro or use fallback
+            console.log('\n📋 STEP 1: Getting audio source...');
             this.app.updateProgressBar(5, 'Getting active sequence...');
             const audioSource = await this.getActiveAudioSource();
+            console.log(`   - Audio source obtained:`, audioSource);
             
-            // Step 2: Run silence detection
-            this.app.updateProgressBar(10, 'Running silence detection...');
+            // Step 2: Run silence detection via backend API
+            console.log('\n🔍 STEP 2: Running backend silence detection...');
+            this.app.updateProgressBar(10, 'Running backend silence detection...');
             let detectionResult;
             
             if (this.silenceDetector) {
+                console.log('   - Using enhanced silenceDetector with backend integration');
+                // Try enhanced detection first
                 detectionResult = await this.silenceDetector.detectSilence(
                     audioSource, 
                     {
@@ -201,9 +218,12 @@ class FeatureManager {
                     }
                 );
             } else {
-                // Fallback to basic detection
-                detectionResult = await this.runBasicSilenceDetection(audioSource, options);
+                console.log('   - Using direct backend API detection (no silenceDetector)');
+                // Use backend API detection
+                detectionResult = await this.runBackendSilenceDetection(audioSource, options);
             }
+            
+            console.log('   - Detection result received:', detectionResult);
 
             // Step 3: Validate and filter results
             this.app.updateProgressBar(70, 'Validating results...');
@@ -264,29 +284,126 @@ class FeatureManager {
     // FALLBACK IMPLEMENTATIONS
     // ========================================
 
-    async runBasicSilenceDetection(audioSource, options) {
-        this.app.log('📋 Running basic silence detection (fallback mode)...', 'info');
+    // OLD: Fallback to basic detection
+    // async runBasicSilenceDetection(audioSource, options) {
+    //     this.app.log('📋 Running basic silence detection (fallback mode)...', 'info');
+    //     
+    //     // Use the basic detection from the main app
+    //     const threshold = document.getElementById('silenceThreshold')?.value || -30;
+    //     const duration = document.getElementById('silenceDuration')?.value || 0.5;
+    //     
+    //     await this.app.simulateProcessing(2000);
+    //     
+    //     const mockResults = this.app.generateMockSilenceResults(threshold, duration);
+    //     
+    //     return {
+    //         success: true,
+    //         results: {
+    //             basic: mockResults,
+    //             combined: mockResults
+    //         },
+    //         metadata: {
+    //             duration: 2,
+    //             methods: ['basic'],
+    //             audioFile: audioSource.name || 'unknown'
+    //         }
+    //     };
+    // }
+    
+    // Run backend silence detection via main app's API method
+    async runBackendSilenceDetection(audioSource, options) {
+        // 🎯 ENHANCED CONSOLE LOGGING: FeatureManager backend detection start
+        console.log('\n🎯 =================================');
+        console.log('🎯 FEATUREMANAGER BACKEND DETECTION');
+        console.log('🎯 =================================');
+        console.log('🚀 Running backend silence detection via API...');
+        console.log(`   - Audio source: ${audioSource?.name || 'Unknown'}`);
+        console.log(`   - Options:`, options);
+        console.log(`   - Current audio blob available: ${!!this.app.currentAudioBlob}`);
         
-        // Use the basic detection from the main app
-        const threshold = document.getElementById('silenceThreshold')?.value || -30;
-        const duration = document.getElementById('silenceDuration')?.value || 0.5;
+        this.app.log('🚀 FeatureManager: Starting backend silence detection via API...', 'info');
         
-        await this.app.simulateProcessing(2000);
-        
-        const mockResults = this.app.generateMockSilenceResults(threshold, duration);
-        
-        return {
-            success: true,
-            results: {
-                basic: mockResults,
-                combined: mockResults
-            },
-            metadata: {
-                duration: 2,
-                methods: ['basic'],
-                audioFile: audioSource.name || 'unknown'
+        try {
+            // Ensure audio is loaded for backend processing
+            if (!this.app.currentAudioBlob) {
+                console.error('❌ No audio blob available for backend processing');
+                throw new Error('No audio blob available for backend processing');
             }
-        };
+            
+            console.log('📤 Calling main app sendAudioToSilenceDetectionApi()...');
+            
+            // Use the main app's backend API method
+            await this.app.sendAudioToSilenceDetectionApi();
+            
+            // Get the results from the main app
+            const detectionResults = this.app.lastSilenceResults || [];
+            
+            console.log('📥 Backend API call completed!');
+            console.log(`   - Results received: ${detectionResults.length} segments`);
+            console.log(`   - Raw results:`, detectionResults);
+            
+            const result = {
+                success: true,
+                results: {
+                    backend: detectionResults,
+                    combined: detectionResults
+                },
+                metadata: {
+                    duration: detectionResults.reduce((sum, seg) => sum + (seg.duration || 0), 0),
+                    methods: ['backend-api'],
+                    audioFile: audioSource.name || 'unknown',
+                    segmentCount: detectionResults.length
+                }
+            };
+            
+            console.log('✅ FeatureManager backend detection completed successfully!');
+            console.log('   - Final result object:', result);
+            
+            return result;
+            
+        } catch (error) {
+            console.error('\n❌ =================================');
+            console.error('❌ FEATUREMANAGER BACKEND FAILED!');
+            console.error('❌ =================================');
+            console.error(`   - Error message: ${error.message}`);
+            console.error(`   - Error stack:`, error.stack);
+            console.error('❌ NO MOCK FALLBACK - Backend required!');
+            
+            this.app.log(`❌ FeatureManager backend detection failed: ${error.message}`, 'error');
+            
+
+            throw error; // Re-throw to ensure no silent failures with dummy data
+        }
+    }
+    
+    // Generate mock silence results for fallback
+    generateMockSilenceResults(threshold, minDuration) {
+        return [
+            {
+                start: 5.2,
+                end: 7.8,
+                duration: 2.6,
+                confidence: 0.85,
+                avgLevel: threshold,
+                method: 'mock'
+            },
+            {
+                start: 12.1,
+                end: 13.7,
+                duration: 1.6,
+                confidence: 0.92,
+                avgLevel: threshold,
+                method: 'mock'
+            },
+            {
+                start: 18.9,
+                end: 21.4,
+                duration: 2.5,
+                confidence: 0.88,
+                avgLevel: threshold,
+                method: 'mock'
+            }
+        ].filter(seg => seg.duration >= minDuration);
     }
 
     // ========================================

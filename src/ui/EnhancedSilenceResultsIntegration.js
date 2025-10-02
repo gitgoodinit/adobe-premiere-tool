@@ -31,10 +31,10 @@ class EnhancedSilenceResultsIntegration {
             // Override existing methods
             this.overrideExistingMethods();
             
-            console.log('✅ Enhanced UI Integration initialized successfully');
+            console.log('Enhanced UI Integration initialized successfully');
             
         } catch (error) {
-            console.error('❌ Enhanced UI Integration failed:', error);
+            console.error('Enhanced UI Integration failed:', error);
             this.createFallbackUI();
         }
     }
@@ -109,13 +109,34 @@ class EnhancedSilenceResultsIntegration {
             this.handleSilenceDetectionComplete(event.detail);
         });
 
-        // Override the detectSilence button
+        // Override the detectSilence button - ensure ONLY backend API call happens
         const detectSilenceBtn = document.getElementById('detectSilence');
         if (detectSilenceBtn) {
-            detectSilenceBtn.addEventListener('click', (e) => {
+            // Remove all existing event listeners by cloning the button
+            const newBtn = detectSilenceBtn.cloneNode(true);
+            detectSilenceBtn.parentNode.replaceChild(newBtn, detectSilenceBtn);
+            
+            // Add ONLY our backend API event handler
+            newBtn.addEventListener('click', async (e) => {
                 e.preventDefault();
-                this.runEnhancedSilenceDetection();
+                e.stopPropagation();
+                
+                console.log('Enhanced Silence Detection button clicked - Backend API only');
+                console.log('Calling backend API directly via main app...');
+                
+                try {
+                    // Call backend API directly through main app - NO OTHER PROCESSING
+                    await this.app.sendAudioToSilenceDetectionApi();
+                    
+                    console.log('Backend API call completed successfully');
+                    
+                } catch (error) {
+                    console.error('Backend API call failed:', error);
+                    this.app.showUIMessage(`Backend API failed: ${error.message}`, 'error');
+                }
             });
+            
+            console.log('Button event handler replaced - Backend API only, no AI processing');
         }
 
         // Add toggle button for enhanced UI
@@ -193,53 +214,85 @@ class EnhancedSilenceResultsIntegration {
     }
 
     async runEnhancedDetectionWorkflow() {
-        // Simulate enhanced detection workflow
-        // In a real implementation, this would call your enhanced features
-        
-        // Generate mock results for demonstration
-        const mockResults = [
-            {
-                start: 0.5,
-                end: 0.9,
-                duration: 0.4,
-                consensusConfidence: 0.95,
-                method: 'whisper',
-                type: 'speech_gap',
-                detectionMethods: ['whisper', 'ffmpeg'],
-                qualityScore: 92,
-                recommendedAction: 'auto_trim',
-                confidenceLevel: 'very_high',
-                visualizationColor: '#4CAF50'
-            },
-            {
-                start: 1.8,
-                end: 2.8,
-                duration: 1.0,
-                consensusConfidence: 0.88,
-                method: 'whisper',
-                type: 'speech_gap',
-                detectionMethods: ['whisper', 'webAudio'],
-                qualityScore: 85,
-                recommendedAction: 'auto_trim',
-                confidenceLevel: 'high',
-                visualizationColor: '#8BC34A'
-            },
-            {
-                start: 3.8,
-                end: 5.0,
-                duration: 1.2,
-                consensusConfidence: 0.82,
-                method: 'ffmpeg',
-                type: 'end_silence',
-                detectionMethods: ['ffmpeg'],
-                qualityScore: 78,
-                recommendedAction: 'review_manually',
-                confidenceLevel: 'medium',
-                visualizationColor: '#CDDC39'
+        try {
+            // Call the backend API for enhanced silence detection
+            console.log('Running enhanced detection workflow via backend API...');
+            
+            // Use the main app's backend API method
+            if (!this.app || !this.app.currentAudioBlob) {
+                throw new Error('No audio blob available for detection. Please load media first.');
             }
-        ];
-
-        return mockResults;
+            
+            // Call the backend API through the main app
+            await this.app.sendAudioToSilenceDetectionApi();
+            
+            // Get the results from the main app's last results
+            const backendResults = this.app.lastSilenceResults || [];
+            
+            // Convert backend response to enhanced format
+            const enhancedResults = this.convertBackendResultsToEnhanced(backendResults);
+            
+            console.log(`Enhanced detection completed: ${enhancedResults.length} segments found`);
+            return enhancedResults;
+            
+        } catch (error) {
+            console.error('Enhanced detection workflow failed:', error);
+            throw error;
+        }
+    }
+    
+    // Convert backend API results to enhanced format
+    convertBackendResultsToEnhanced(backendResults) {
+        if (!Array.isArray(backendResults)) {
+            return [];
+        }
+        
+        return backendResults.map((segment, index) => ({
+            start: segment.start || segment.startTime || 0,
+            end: segment.end || segment.endTime || (segment.start + segment.duration) || 0,
+            duration: segment.duration || ((segment.end || segment.endTime) - (segment.start || segment.startTime)) || 0,
+            consensusConfidence: segment.confidence || 0.8,
+            method: segment.method || 'api',
+            type: this.classifySilenceType(segment),
+            detectionMethods: segment.methods || ['api'],
+            qualityScore: Math.round((segment.confidence || 0.8) * 100),
+            recommendedAction: this.getRecommendedAction(segment),
+            confidenceLevel: this.getConfidenceLevel(segment.confidence || 0.8),
+            visualizationColor: this.getVisualizationColor(segment.confidence || 0.8)
+        }));
+    }
+    
+    // Helper methods for enhanced detection
+    classifySilenceType(segment) {
+        if (segment.type) return segment.type;
+        
+        const duration = segment.duration || 0;
+        if (duration < 0.5) return 'pause';
+        if (duration < 2.0) return 'speech_gap';
+        return 'silence';
+    }
+    
+    getRecommendedAction(segment) {
+        const confidence = segment.confidence || 0;
+        const duration = segment.duration || 0;
+        
+        if (confidence > 0.9 && duration < 2.0) return 'auto_trim';
+        if (confidence > 0.7) return 'review_recommended';
+        return 'review_manually';
+    }
+    
+    getConfidenceLevel(confidence) {
+        if (confidence >= 0.9) return 'very_high';
+        if (confidence >= 0.8) return 'high';
+        if (confidence >= 0.6) return 'medium';
+        return 'low';
+    }
+    
+    getVisualizationColor(confidence) {
+        if (confidence >= 0.9) return '#4CAF50'; // Green
+        if (confidence >= 0.8) return '#8BC34A'; // Light Green
+        if (confidence >= 0.6) return '#CDDC39'; // Lime
+        return '#FFC107'; // Amber
     }
 
     displayEnhancedResults(results, audioFile) {

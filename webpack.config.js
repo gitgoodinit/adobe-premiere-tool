@@ -141,6 +141,10 @@ module.exports = {
       '@ui': path.resolve(__dirname, 'src/ui'),
       '@services': path.resolve(__dirname, 'src/services'),
     },
+    fallback: {
+      child_process: false,
+      os: false,
+    },
   },
   performance: {
     hints: isProduction ? 'warning' : false,

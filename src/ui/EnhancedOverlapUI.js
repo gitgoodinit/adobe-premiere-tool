@@ -424,7 +424,7 @@ class EnhancedOverlapUI {
         // Update status
         this.updateAnalysisStatus('completed', `Found ${overlaps.length} overlaps`);
         
-        this.app.log(`✅ Enhanced UI displayed ${overlaps.length} overlaps`, 'success');
+        this.app.log(`Enhanced UI displayed ${overlaps.length} overlaps`, 'success');
     }
 
     showPanels() {
@@ -529,7 +529,7 @@ class EnhancedOverlapUI {
             }, 200);
         }
         
-        this.app.log('🎵 Audio information panel updated', 'info');
+        this.app.log('Audio information panel updated', 'info');
     }
 
     updateQuickStats(overlaps) {
@@ -757,7 +757,7 @@ class EnhancedOverlapUI {
     async resolveSelectedOverlaps() {
         const selectedOverlaps = this.getSelectedOverlaps();
         if (selectedOverlaps.length === 0) {
-            this.app.showUIMessage('⚠️ Please select overlaps to resolve', 'warning');
+            this.app.showUIMessage('Please select overlaps to resolve', 'warning');
             return;
         }
 
@@ -789,8 +789,8 @@ class EnhancedOverlapUI {
             
         } catch (error) {
             this.showProgress(false);
-            this.app.log(`❌ Resolution failed: ${error.message}`, 'error');
-            this.app.showUIMessage(`❌ Resolution failed: ${error.message}`, 'error');
+            this.app.log(`Resolution failed: ${error.message}`, 'error');
+            this.app.showUIMessage(`Resolution failed: ${error.message}`, 'error');
         }
     }
 
@@ -816,7 +816,7 @@ class EnhancedOverlapUI {
     }
 
     async applyAudioDucking(overlap, duckingAmount) {
-        this.app.log(`🔧 Applying audio ducking (${Math.round(duckingAmount * 100)}%) to overlap`, 'info');
+        this.app.log(`Applying audio ducking (${Math.round(duckingAmount * 100)}%) to overlap`, 'info');
         
         try {
             // Simulate ducking process with realistic delay
@@ -837,13 +837,13 @@ class EnhancedOverlapUI {
             
             return true;
         } catch (error) {
-            this.app.log(`❌ Audio ducking failed: ${error.message}`, 'error');
+            this.app.log(`Audio ducking failed: ${error.message}`, 'error');
             throw error;
         }
     }
 
     async applyClipShifting(overlap, shiftTolerance) {
-        this.app.log(`🔧 Applying clip shifting (±${shiftTolerance}s) to overlap`, 'info');
+        this.app.log(`Applying clip shifting (±${shiftTolerance}s) to overlap`, 'info');
         
         try {
             // Simulate clip shifting with realistic delay
@@ -863,7 +863,7 @@ class EnhancedOverlapUI {
             
             return true;
         } catch (error) {
-            this.app.log(`❌ Clip shifting failed: ${error.message}`, 'error');
+            this.app.log(`Clip shifting failed: ${error.message}`, 'error');
             throw error;
         }
     }
