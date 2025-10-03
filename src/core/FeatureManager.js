@@ -280,47 +280,10 @@ class FeatureManager {
         }
     }
 
-    // ========================================
-    // FALLBACK IMPLEMENTATIONS
-    // ========================================
 
-    // OLD: Fallback to basic detection
-    // async runBasicSilenceDetection(audioSource, options) {
-    //     this.app.log('📋 Running basic silence detection (fallback mode)...', 'info');
-    //     
-    //     // Use the basic detection from the main app
-    //     const threshold = document.getElementById('silenceThreshold')?.value || -30;
-    //     const duration = document.getElementById('silenceDuration')?.value || 0.5;
-    //     
-    //     await this.app.simulateProcessing(2000);
-    //     
-    //     const mockResults = this.app.generateMockSilenceResults(threshold, duration);
-    //     
-    //     return {
-    //         success: true,
-    //         results: {
-    //             basic: mockResults,
-    //             combined: mockResults
-    //         },
-    //         metadata: {
-    //             duration: 2,
-    //             methods: ['basic'],
-    //             audioFile: audioSource.name || 'unknown'
-    //         }
-    //     };
-    // }
     
     // Run backend silence detection via main app's API method
     async runBackendSilenceDetection(audioSource, options) {
-        // 🎯 ENHANCED CONSOLE LOGGING: FeatureManager backend detection start
-        console.log('\n🎯 =================================');
-        console.log('🎯 FEATUREMANAGER BACKEND DETECTION');
-        console.log('🎯 =================================');
-        console.log('🚀 Running backend silence detection via API...');
-        console.log(`   - Audio source: ${audioSource?.name || 'Unknown'}`);
-        console.log(`   - Options:`, options);
-        console.log(`   - Current audio blob available: ${!!this.app.currentAudioBlob}`);
-        
         this.app.log('🚀 FeatureManager: Starting backend silence detection via API...', 'info');
         
         try {
@@ -338,7 +301,6 @@ class FeatureManager {
             // Get the results from the main app
             const detectionResults = this.app.lastSilenceResults || [];
             
-            console.log('📥 Backend API call completed!');
             console.log(`   - Results received: ${detectionResults.length} segments`);
             console.log(`   - Raw results:`, detectionResults);
             

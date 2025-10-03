@@ -45,7 +45,7 @@ class AudioProcessor {
         
         switch (platform) {
             case 'win32':
-                return process.env.FFMPEG_PATH || './bin/ffmpeg.exe';
+                return process.env.FFMPEG_PATH || '../bin/ffmpeg.exe';
             case 'darwin':
                 return process.env.FFMPEG_PATH || '/usr/local/bin/ffmpeg';
             case 'linux':
@@ -161,51 +161,134 @@ class AudioProcessor {
         } = options;
 
         return new Promise((resolve, reject) => {
-            let command = ffmpeg(inputPath);
-
-            if (trimMode === 'remove') {
-                // Remove silence segments
-                const filters = [];
-                silenceSegments.forEach((segment, index) => {
-                    if (segment.start > 0) {
-                        filters.push(`[0:a]atrim=start=0:end=${segment.start}[a${index * 2}]`);
+            if (trimMode === 'remove' && silenceSegments.length > 0) {
+                // Create audio segments by removing silence
+                // Sort silence segments by start time
+                const sortedSegments = [...silenceSegments].sort((a, b) => a.start - b.start);
+                
+                // Build audio segments between silence
+                const audioSegments = [];
+                let lastEnd = 0;
+                
+                sortedSegments.forEach(silence => {
+                    // Add audio before this silence segment
+                    if (silence.start > lastEnd) {
+                        audioSegments.push({
+                            start: lastEnd,
+                            end: silence.start
+                        });
                     }
-                    if (segment.end) {
-                        filters.push(`[0:a]atrim=start=${segment.end}[a${index * 2 + 1}]`);
-                    }
+                    lastEnd = silence.end || silence.start + silence.duration;
                 });
                 
-                if (filters.length > 0) {
-                    command = command.complexFilter(filters);
+                // Add final audio segment after last silence
+                // We'll let FFmpeg handle the end automatically
+                
+                if (audioSegments.length === 0) {
+                    // No audio segments to keep, create minimal output
+                    const command = ffmpeg(inputPath)
+                        .audioFilters('volume=0')
+                        .duration(0.1)
+                        .output(outputPath)
+                        .on('end', () => {
+                            resolve({
+                                outputPath,
+                                segmentsProcessed: silenceSegments.length,
+                                trimMode,
+                                audioSegments: 0
+                            });
+                        })
+                        .on('error', (err) => {
+                            reject(new Error(`Silence trimming failed: ${err.message}`));
+                        });
+                    
+                    command.run();
+                    return;
                 }
+                
+                // Use simple approach: concatenate audio segments
+                const filters = [];
+                const inputs = [];
+                
+                audioSegments.forEach((segment, index) => {
+                    filters.push(`[0:a]atrim=start=${segment.start}:end=${segment.end},asetpts=PTS-STARTPTS[a${index}]`);
+                    inputs.push(`[a${index}]`);
+                });
+                
+                // Concatenate all segments
+                if (audioSegments.length > 1) {
+                    filters.push(`${inputs.join('')}concat=n=${audioSegments.length}:v=0:a=1[out]`);
+                } else {
+                    filters.push(`[a0]anull[out]`);
+                }
+                
+                const command = ffmpeg(inputPath)
+                    .complexFilter(filters)
+                    .outputOptions(['-map', '[out]'])
+                    .output(outputPath)
+                    .on('end', () => {
+                        resolve({
+                            outputPath,
+                            segmentsProcessed: silenceSegments.length,
+                            trimMode,
+                            audioSegments: audioSegments.length
+                        });
+                    })
+                    .on('error', (err) => {
+                        reject(new Error(`Silence trimming failed: ${err.message}`));
+                    });
+                
+                command.run();
+                
             } else if (trimMode === 'fade') {
                 // Apply fade in/out to silence segments
-                const filters = [];
+                let filterString = '[0:a]';
+                
                 silenceSegments.forEach((segment, index) => {
-                    filters.push(`[0:a]afade=t=in:st=${segment.start}:d=${fadeInDuration}[a${index}]`);
-                    if (segment.end) {
-                        filters.push(`[a${index}]afade=t=out:st=${segment.end - fadeOutDuration}:d=${fadeOutDuration}[a${index + 1}]`);
+                    const fadeIn = `afade=t=in:st=${segment.start}:d=${fadeInDuration}`;
+                    const fadeOut = segment.end ? `,afade=t=out:st=${segment.end - fadeOutDuration}:d=${fadeOutDuration}` : '';
+                    filterString += fadeIn + fadeOut;
+                    if (index < silenceSegments.length - 1) {
+                        filterString += ',';
                     }
                 });
                 
-                if (filters.length > 0) {
-                    command = command.complexFilter(filters);
-                }
-            }
-
-            command
-                .output(outputPath)
-                .on('end', () => {
-                    resolve({
-                        outputPath,
-                        segmentsProcessed: silenceSegments.length,
-                        trimMode
+                filterString += '[out]';
+                
+                const command = ffmpeg(inputPath)
+                    .complexFilter([filterString])
+                    .outputOptions(['-map', '[out]'])
+                    .output(outputPath)
+                    .on('end', () => {
+                        resolve({
+                            outputPath,
+                            segmentsProcessed: silenceSegments.length,
+                            trimMode
+                        });
+                    })
+                    .on('error', (err) => {
+                        reject(new Error(`Silence trimming failed: ${err.message}`));
                     });
-                })
-                .on('error', (err) => {
-                    reject(new Error(`Silence trimming failed: ${err.message}`));
-                })
-                .run();
+                
+                command.run();
+                
+            } else {
+                // No trimming needed, just copy
+                const command = ffmpeg(inputPath)
+                    .output(outputPath)
+                    .on('end', () => {
+                        resolve({
+                            outputPath,
+                            segmentsProcessed: 0,
+                            trimMode
+                        });
+                    })
+                    .on('error', (err) => {
+                        reject(new Error(`Silence trimming failed: ${err.message}`));
+                    });
+                
+                command.run();
+            }
         });
     }
 

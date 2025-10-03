@@ -39,8 +39,17 @@ const upload = multer({
         files: 10 // Allow up to 10 files for multi-track analysis
     },
     fileFilter: (req, file, cb) => {
-        const allowedTypes = ['audio/mpeg', 'audio/wav', 'audio/mp3', 'audio/m4a', 'audio/ogg'];
-        if (allowedTypes.includes(file.mimetype)) {
+        const allowedTypes = [
+            'audio/mpeg', 'audio/wav', 'audio/mp3', 'audio/m4a', 'audio/ogg',
+            'audio/wave', 'audio/x-wav', 'audio/vnd.wav', // Additional WAV MIME types
+            'application/octet-stream' // For files with generic MIME type
+        ];
+        
+        // Also check file extension as fallback
+        const allowedExtensions = ['.mp3', '.wav', '.m4a', '.ogg', '.wave'];
+        const fileExtension = path.extname(file.originalname).toLowerCase();
+        
+        if (allowedTypes.includes(file.mimetype) || allowedExtensions.includes(fileExtension)) {
             cb(null, true);
         } else {
             cb(new Error('Invalid file type. Only audio files are allowed.'), false);
@@ -66,11 +75,20 @@ router.post('/detect', upload.array('audio', 10), async (req, res) => {
             fileCount: req.files?.length || 0
         });
 
-        if (!req.files || req.files.length < 2) {
+        // Handle single file by duplicating it for self-overlap detection
+        if (!req.files || req.files.length === 0) {
             return res.status(400).json({
-                error: 'At least 2 audio files required for overlap detection',
+                error: 'No audio files provided for overlap detection',
                 requestId
             });
+        }
+
+        let filesToProcess = req.files;
+        
+        // If only one file provided, duplicate it for self-overlap detection
+        if (req.files.length === 1) {
+            logger.info(`[${requestId}] Single file provided, enabling self-overlap detection`);
+            filesToProcess = [req.files[0], req.files[0]];
         }
 
         // Validate request body
@@ -97,7 +115,7 @@ router.post('/detect', upload.array('audio', 10), async (req, res) => {
         };
 
         // Perform overlap detection
-        const results = await overlapDetector.detectOverlaps(req.files, options);
+        const results = await overlapDetector.detectOverlaps(filesToProcess, options);
 
         const processingTime = Date.now() - startTime;
         
@@ -110,7 +128,7 @@ router.post('/detect', upload.array('audio', 10), async (req, res) => {
             success: true,
             requestId,
             processingTime: `${processingTime}ms`,
-            audioFiles: req.files.map(file => ({
+            audioFiles: filesToProcess.map(file => ({
                 originalName: file.originalname,
                 size: file.size,
                 uploadedAt: new Date().toISOString()

@@ -39,7 +39,7 @@ const upload = multer({
         files: 1
     },
     fileFilter: (req, file, cb) => {
-        const allowedTypes = ['audio/mpeg', 'audio/wav', 'audio/mp3', 'audio/m4a', 'audio/ogg'];
+        const allowedTypes = ['audio/mpeg', 'audio/wav', 'audio/mp3', 'audio/m4a', 'audio/ogg', 'audio/mp4', 'video/mp4'];
         if (allowedTypes.includes(file.mimetype)) {
             cb(null, true);
         } else {
@@ -74,9 +74,23 @@ router.post('/detect', upload.single('audio'), async (req, res) => {
             });
         }
 
-        // Validate request body
+        if (req.body.methods && typeof req.body.methods === 'string') {
+            try {
+                req.body.methods = JSON.parse(req.body.methods);
+            } catch (e) {
+                logger.error(`[${requestId}] Failed to parse methods array: ${e.message}`);
+            }
+        }
+        
+        logger.info(`[${requestId}] Request body after parsing`, { body: req.body });
+        
         const validationResult = validation.validateSilenceDetection(req.body);
         if (validationResult.error) {
+            logger.error(`[${requestId}] Validation failed`, {
+                error: validationResult.error.message,
+                details: validationResult.error.details,
+                requestBody: req.body
+            });
             return res.status(400).json({
                 error: 'Validation failed',
                 details: validationResult.error.details,
@@ -168,9 +182,31 @@ router.post('/trim', upload.single('audio'), async (req, res) => {
             });
         }
 
+        // Parse JSON fields from FormData
+        const requestBody = { ...req.body };
+        logger.info(`[${requestId}] Raw request body:`, requestBody);
+        
+        if (requestBody.silenceSegments && typeof requestBody.silenceSegments === 'string') {
+            try {
+                requestBody.silenceSegments = JSON.parse(requestBody.silenceSegments);
+                logger.info(`[${requestId}] Parsed silenceSegments:`, requestBody.silenceSegments);
+            } catch (parseError) {
+                logger.error(`[${requestId}] JSON parse error:`, parseError.message);
+                return res.status(400).json({
+                    error: 'Invalid silenceSegments JSON format',
+                    details: parseError.message,
+                    requestId
+                });
+            }
+        }
+
         // Validate request body
-        const validationResult = validation.validateSilenceTrimming(req.body);
+        const validationResult = validation.validateSilenceTrimming(requestBody);
         if (validationResult.error) {
+            logger.error(`[${requestId}] Validation failed:`, {
+                error: validationResult.error.details,
+                requestBody: requestBody
+            });
             return res.status(400).json({
                 error: 'Validation failed',
                 details: validationResult.error.details,
@@ -179,13 +215,13 @@ router.post('/trim', upload.single('audio'), async (req, res) => {
         }
 
         const options = {
-            silenceSegments: req.body.silenceSegments || [],
-            trimMode: req.body.trimMode || 'remove', // 'remove', 'fade', 'compress'
-            fadeInDuration: parseFloat(req.body.fadeInDuration) || 0.1,
-            fadeOutDuration: parseFloat(req.body.fadeOutDuration) || 0.1,
-            compressionRatio: parseFloat(req.body.compressionRatio) || 0.5,
-            outputFormat: req.body.outputFormat || 'mp3',
-            quality: req.body.quality || 'high'
+            silenceSegments: requestBody.silenceSegments || [],
+            trimMode: requestBody.trimMode || 'remove', // 'remove', 'fade', 'compress'
+            fadeInDuration: parseFloat(requestBody.fadeInDuration) || 0.1,
+            fadeOutDuration: parseFloat(requestBody.fadeOutDuration) || 0.1,
+            compressionRatio: parseFloat(requestBody.compressionRatio) || 0.5,
+            outputFormat: requestBody.outputFormat || 'mp3',
+            quality: requestBody.quality || 'high'
         };
 
         // Perform silence trimming
@@ -381,6 +417,49 @@ router.get('/status/:requestId', async (req, res) => {
         res.status(500).json({
             error: 'Failed to get job status',
             message: error.message
+        });
+    }
+});
+
+/**
+ * @route GET /api/silence/download-last
+ * @desc Download the last processed audio file
+ * @access Public
+ */
+router.get('/download-last', (req, res) => {
+    try {
+        // Find the most recent processed file
+        const uploadsDir = path.join(__dirname, '../uploads');
+        const files = fs.readdirSync(uploadsDir)
+            .filter(file => file.includes('trimmed_'))
+            .map(file => ({
+                name: file,
+                path: path.join(uploadsDir, file),
+                mtime: fs.statSync(path.join(uploadsDir, file)).mtime
+            }))
+            .sort((a, b) => b.mtime - a.mtime);
+
+        if (files.length === 0) {
+            return res.status(404).json({
+                error: 'No processed audio files found'
+            });
+        }
+
+        const latestFile = files[0];
+        
+        // Set headers for download
+        res.setHeader('Content-Type', 'audio/wav');
+        res.setHeader('Content-Disposition', `attachment; filename="${latestFile.name}"`);
+        
+        // Stream the file
+        const fileStream = fs.createReadStream(latestFile.path);
+        fileStream.pipe(res);
+        
+    } catch (error) {
+        logger.error('Download failed:', error);
+        res.status(500).json({
+            error: 'Download failed',
+            details: error.message
         });
     }
 });

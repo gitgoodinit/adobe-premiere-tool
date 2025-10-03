@@ -17,6 +17,7 @@ class AudioToolsPro {
         this.currentFeature = 'feature1';
         this.lastSilenceResults = [];
         this.currentAudioPath = null;
+        this.isMediaLoaded = false; // Track if media is successfully loaded
         
         // Welcome screen management
         this.welcomeScreen = null;
@@ -217,31 +218,45 @@ class AudioToolsPro {
     setupEventListeners() {
         this.log('🔗 Setting up event listeners...', 'info');
         
-        // Load Media Button - FIXED: Single click handling
+        // Load Media Button - FIXED: Single click handling with state management
         const loadMediaBtn = document.getElementById('loadMediaBtn');
         if (loadMediaBtn) {
             // Remove any existing listeners to prevent duplicates
-            loadMediaBtn.removeEventListener('click', this.handleLoadMedia.bind(this));
+            loadMediaBtn.replaceWith(loadMediaBtn.cloneNode(true));
+            const newLoadMediaBtn = document.getElementById('loadMediaBtn');
             
-            // Add single click handler with debouncing
-            let loadingInProgress = false;
-            loadMediaBtn.addEventListener('click', async (e) => {
+            // Add single click handler with proper state checking
+            newLoadMediaBtn.addEventListener('click', async (e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 
-                if (loadingInProgress) {
+                this.log(`🖱️ Load Media button clicked. Current state: isMediaLoaded=${this.isMediaLoaded}`, 'info');
+                
+                // Check if already processing
+                if (newLoadMediaBtn.disabled) {
                     this.log('⏳ Media loading already in progress, ignoring click', 'warning');
                     return;
                 }
                 
-                loadingInProgress = true;
-                this.showLoadingState(loadMediaBtn, 'Loading...');
+                // Check if media is already loaded
+                if (this.isMediaLoaded) {
+                    this.log(`ℹ️ Media already loaded (${this.currentFileName}), showing info message`, 'info');
+                    this.showUIMessage(`🎵 Media already loaded: ${this.currentFileName || 'Current Media'}`, 'info');
+                    // Keep the button state as 'loaded' - don't change it
+                    // Force the state to stay as loaded
+                    setTimeout(() => {
+                        if (this.isMediaLoaded) {
+                            this.updateLoadButtonState('loaded');
+                        }
+                    }, 100);
+                    return;
+                }
                 
                 try {
                     await this.handleLoadMedia();
-                } finally {
-                    loadingInProgress = false;
-                    this.hideLoadingState(loadMediaBtn, 'Load Media');
+                } catch (error) {
+                    this.log(`❌ Load media error: ${error.message}`, 'error');
+                    // Error state is handled in handleLoadMedia
                 }
             });
             
@@ -297,9 +312,9 @@ class AudioToolsPro {
         try {
             this.log('📂 Loading media from Adobe Premiere timeline...', 'info');
             this.showUIMessage('📂 Loading media from timeline...', 'processing');
-            
+            this.updateLoadButtonState('loading');
 
-            // Only get selected audio directly from Premiere timeline
+            // Get selected audio directly from Premiere timeline
             const audioData = await this.getSelectedAudioFromAdobe();
             
             if (!audioData || !audioData.selectedClips || audioData.selectedClips.length === 0) {
@@ -318,10 +333,16 @@ class AudioToolsPro {
             // Store the current file name for Enhanced UI display
             this.currentFileName = clip.name;
             
+            // Update button to persistent loaded state
+            this.updateLoadButtonState('loaded');
+            
             this.log(`✅ Media loaded successfully from timeline: ${clip.name}`, 'success');
             this.showUIMessage(`✅ Loaded from timeline: ${clip.name}`, 'success');
             
         } catch (error) {
+            // Update button to error state
+            this.updateLoadButtonState('error');
+            
             this.log(`❌ Failed to load media from timeline: ${error.message}`, 'error');
             this.showUIMessage(`❌ Load failed: ${error.message}`, 'error');
             throw error; // Re-throw to trigger finally block
@@ -432,22 +453,6 @@ class AudioToolsPro {
         const element = document.getElementById(id);
         if (element) {
             element.textContent = value;
-        }
-    }
-
-    // Show loading state on button
-    showLoadingState(button, text) {
-        if (button) {
-            button.disabled = true;
-            button.innerHTML = `<i class="fas fa-spinner fa-spin"></i><span>${text}</span>`;
-        }
-    }
-
-    // Hide loading state on button
-    hideLoadingState(button, originalText) {
-        if (button) {
-            button.disabled = false;
-            button.innerHTML = `<i class="fas fa-folder-open"></i><span>${originalText}</span>`;
         }
     }
 
@@ -579,16 +584,48 @@ class AudioToolsPro {
                     this.log(`📁 Media path obtained: ${audioFilePath}`, 'success');
                     
                     // Load audio as blob for backend API upload
-                    audioBlob = await this.loadAudioFile(audioFilePath);
-                    
-                    if (audioBlob) {
-                        this.currentAudioBlob = audioBlob;
-                        this.log(`✅ Audio blob prepared for backend: ${(audioBlob.size / 1024).toFixed(1)}KB`, 'success');
+                    try {
+                        // Use fetch to load the audio file directly in CEP environment
+                        const fileUrl = `file:///${audioFilePath.replace(/\\/g, '/')}`;
+                        this.log(`🔗 Loading audio from: ${fileUrl}`, 'info');
                         
-                        // Set up audio player for preview
-                        const audioUrl = URL.createObjectURL(audioBlob);
-                        if (this.audioPlayer) {
-                            this.audioPlayer.src = audioUrl;
+                        const response = await fetch(fileUrl);
+                        if (response.ok) {
+                            audioBlob = await response.blob();
+                            this.currentAudioBlob = audioBlob;
+                            this.log(`✅ Audio blob prepared for backend: ${(audioBlob.size / 1024).toFixed(1)}KB`, 'success');
+                            
+                            // Set up audio player for preview
+                            const audioUrl = URL.createObjectURL(audioBlob);
+                            if (this.audioPlayer) {
+                                this.audioPlayer.src = audioUrl;
+                            }
+                        } else {
+                            this.log(`⚠️ Failed to load audio file: ${response.status} ${response.statusText}`, 'warning');
+                            // Fallback to ExtendScript method
+                            audioBlob = await this.loadAudioFile(audioFilePath);
+                            if (audioBlob) {
+                                this.currentAudioBlob = audioBlob;
+                                this.log(`✅ Audio blob prepared for backend (via ExtendScript): ${(audioBlob.size / 1024).toFixed(1)}KB`, 'success');
+                                
+                                const audioUrl = URL.createObjectURL(audioBlob);
+                                if (this.audioPlayer) {
+                                    this.audioPlayer.src = audioUrl;
+                                }
+                            }
+                        }
+                    } catch (fetchError) {
+                        this.log(`⚠️ Fetch failed, trying ExtendScript: ${fetchError.message}`, 'warning');
+                        // Fallback to ExtendScript method
+                        audioBlob = await this.loadAudioFile(audioFilePath);
+                        if (audioBlob) {
+                            this.currentAudioBlob = audioBlob;
+                            this.log(`✅ Audio blob prepared for backend (via ExtendScript): ${(audioBlob.size / 1024).toFixed(1)}KB`, 'success');
+                            
+                            const audioUrl = URL.createObjectURL(audioBlob);
+                            if (this.audioPlayer) {
+                                this.audioPlayer.src = audioUrl;
+                            }
                         }
                     }
                 } else {
@@ -629,6 +666,12 @@ class AudioToolsPro {
             
             this.log('✅ Audio prepared for backend processing', 'success');
             
+            // Now that currentAudioBlob is available, draw the real waveform
+            if (this.currentAudioBlob) {
+                this.log('🎵 Drawing real waveform after audio blob loaded', 'info');
+                await this.drawWaveformFromBlob(this.currentAudioBlob);
+            }
+            
         } catch (error) {
             this.log(`❌ Failed to prepare audio for backend: ${error.message}`, 'error');
             throw error;
@@ -640,8 +683,14 @@ class AudioToolsPro {
         try {
             this.log('🎨 Updating audio visualization components...', 'info');
             
-            // 1. Update main waveform canvas
-            await this.updateWaveformCanvas('waveformCanvas', clip);
+            // 1. Update main waveform canvas with real audio data if available
+            if (this.currentAudioBlob) {
+                this.log('🎵 Drawing real waveform from audio blob', 'info');
+                await this.drawWaveformFromBlob(this.currentAudioBlob);
+            } else {
+                this.log('📊 Drawing placeholder waveform', 'info');
+                await this.updateWaveformCanvas('waveformCanvas', clip);
+            }
             
             // 2. Update audio player elements
             await this.updateAudioPlayers(clip, audioData);
@@ -1131,6 +1180,132 @@ class AudioToolsPro {
     }
 
     // ========================================
+    // FIXED: Auto-load selected media after UI is ready
+    // ========================================
+    
+    async checkAndAutoLoadSelectedMedia() {
+        try {
+            this.log('🔍 Checking for pre-selected media in Premiere Pro...', 'info');
+            
+            // Check if we have selected media in Premiere Pro
+            const audioData = await this.getSelectedAudioFromAdobe();
+            
+            if (!audioData || !audioData.selectedClips || audioData.selectedClips.length === 0) {
+                this.log('ℹ️ No media pre-selected in Premiere Pro', 'info');
+                this.showUIMessage('💡 Select a video/audio clip in Premiere Pro timeline, then click "Load Media"', 'info', 6000);
+                return;
+            }
+            
+            // Media is selected - auto-load it
+            const clip = audioData.selectedClips[0];
+            this.log(`🎵 Auto-loading pre-selected media: ${clip.name}`, 'info');
+            this.showUIMessage(`🎵 Auto-loading selected media: ${clip.name}`, 'processing');
+            
+            // Update load button to show auto-loading state
+            this.updateLoadButtonState('auto-loading');
+            
+            try {
+                // Use the same logic as handleLoadMedia but without user interaction
+                await this.updateMediaUI(clip, audioData);
+                await this.loadAudioForBackendProcessing(clip);
+                
+                // Store the current file name for Enhanced UI display
+                this.currentFileName = clip.name;
+                
+                // Update load button to show persistent loaded state
+                this.updateLoadButtonState('loaded');
+                
+                this.log(`✅ Media auto-loaded successfully: ${clip.name}`, 'success');
+                this.showUIMessage(`✅ Media ready: ${clip.name}`, 'success');
+                
+                // Enable audio-dependent features
+                this.enableAudioDependentButtons();
+                
+                // Update UI to show that media is loaded
+                this.forceUIUpdate();
+                
+                return true;
+                
+            } catch (loadError) {
+                this.log(`❌ Auto-load failed: ${loadError.message}`, 'error');
+                this.updateLoadButtonState('error');
+                this.showUIMessage(`⚠️ Auto-load failed: ${loadError.message}. Please click "Load Media" to try again.`, 'warning', 8000);
+                return false;
+            }
+            
+        } catch (error) {
+            this.log(`❌ Auto-load check failed: ${error.message}`, 'error');
+            // Don't show error to user as this is background check
+            return false;
+        }
+    }
+    
+    // Update load button state with visual feedback
+    updateLoadButtonState(state) {
+        const loadMediaBtn = document.getElementById('loadMediaBtn');
+        if (!loadMediaBtn) return;
+        
+        // Debug logging
+        this.log(`🔧 Updating load button state to: ${state}`, 'info');
+        
+        // Protective logic: Don't change from 'loaded' state unless specifically requested
+        if (this.isMediaLoaded && (state === 'success' || state === 'normal') && 
+            (loadMediaBtn.innerHTML.includes('Media Ready') || loadMediaBtn.innerHTML.includes('Media Loaded'))) {
+            this.log('🛡️ Protecting loaded state from unwanted change', 'info');
+            return;
+        }
+        
+        // Remove existing state classes
+        loadMediaBtn.classList.remove('loading', 'success', 'error', 'auto-loading');
+        
+        switch (state) {
+            case 'loading':
+                loadMediaBtn.classList.add('loading');
+                loadMediaBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Loading...</span>';
+                loadMediaBtn.disabled = true;
+                break;
+                
+            case 'auto-loading':
+                loadMediaBtn.classList.add('auto-loading');
+                loadMediaBtn.innerHTML = '<i class="fas fa-magic"></i><span>Auto-loading...</span>';
+                loadMediaBtn.disabled = true;
+                break;
+                
+            case 'success':
+                loadMediaBtn.classList.add('success');
+                loadMediaBtn.innerHTML = '<i class="fas fa-music"></i><span>Media Ready</span>';
+                loadMediaBtn.disabled = false;
+                this.isMediaLoaded = true;
+                
+                // Don't auto-reset if media is successfully loaded
+                // Only reset on new load or error
+                break;
+                
+            case 'loaded':
+                // Persistent loaded state - doesn't auto-reset
+                loadMediaBtn.classList.add('success');
+                loadMediaBtn.innerHTML = '<i class="fas fa-music"></i><span>Media Ready</span>';
+                loadMediaBtn.disabled = false;
+                this.isMediaLoaded = true; // Set to true so button shows 'already loaded' message
+                break;
+                
+            case 'error':
+                loadMediaBtn.classList.add('error');
+                loadMediaBtn.innerHTML = '<i class="fas fa-exclamation-triangle"></i><span>Load Failed</span>';
+                loadMediaBtn.disabled = false;
+                this.isMediaLoaded = false;
+                break;
+                
+            case 'normal':
+            default:
+                loadMediaBtn.innerHTML = '<i class="fas fa-folder-open"></i><span>Load Media</span>';
+                loadMediaBtn.disabled = false;
+                this.isMediaLoaded = false; // Reset media loaded state
+                break;
+        }
+    }
+
+    // ========================================
     // INITIALIZATION
     // ========================================
     
@@ -1213,6 +1388,11 @@ class AudioToolsPro {
                 this.showMultiTrackInterface();
                 this.showCurrentTrimStatus();
             }, 500);
+            
+            // FIXED: Check for pre-selected media AFTER UI is fully loaded
+            setTimeout(() => {
+                this.checkAndAutoLoadSelectedMedia();
+            }, 1000); // Give UI time to settle
             
         } catch (error) {
             this.log(`❌ Initialization failed: ${error.message}`, 'error');
@@ -1403,7 +1583,7 @@ class AudioToolsPro {
         // Visualization controls
 
         // Trim panel controls
-        this.attachListener('applyTrim', () => this.applyManualTrim());
+        this.attachListener('applyTrim', () => this.applySilenceCuts());
         this.attachListener('transcribeSelection', () => this.transcribeCurrentSelection());
         this.attachListener('setIn', () => this.setTrimFromPlayhead('in'));
         this.attachListener('setOut', () => this.setTrimFromPlayhead('out'));
@@ -1867,8 +2047,8 @@ class AudioToolsPro {
                     toggleBtn.disabled = false;
                 }
                 
-                // Update header load button to show success state
-                this.updateLoadButtonState('success');
+                // Update header load button to show loaded state
+                this.updateLoadButtonState('loaded');
                 
                 this.updateProgress('Audio ready for playback', 100);
                 this.showUIMessage('✅ Media loaded successfully! Ready for processing.', 'success');
@@ -2035,9 +2215,17 @@ class AudioToolsPro {
                             const typedBlob = new Blob([audioBlob], { type: mimeTypes[extension] });
                             this.currentAudioBlob = typedBlob;
                             this.log(`✅ Audio blob pre-loaded: ${(typedBlob.size / 1024).toFixed(1)}KB, type: ${typedBlob.type}`, 'success');
+                            
+                            // Draw real waveform now that audio blob is available
+                            this.log('🎵 Drawing real waveform after audio blob pre-loaded', 'info');
+                            await this.drawWaveformFromBlob(typedBlob);
                         } else {
                             this.currentAudioBlob = audioBlob;
                             this.log(`✅ Audio blob pre-loaded: ${(audioBlob.size / 1024).toFixed(1)}KB, type: ${audioBlob.type || 'unknown'}`, 'success');
+                            
+                            // Draw real waveform now that audio blob is available
+                            this.log('🎵 Drawing real waveform after audio blob pre-loaded', 'info');
+                            await this.drawWaveformFromBlob(audioBlob);
                         }
                     } else {
                         this.log(`⚠️ Failed to pre-load audio: HTTP ${response.status}`, 'warning');
@@ -2302,6 +2490,71 @@ class AudioToolsPro {
         ctx.restore();
     }
 
+    // Convert MP4/video blob to audio-only format using Web Audio API
+    async convertToAudioFormat(videoBlob) {
+        try {
+            // Create audio context
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            
+            // Convert blob to array buffer
+            const arrayBuffer = await videoBlob.arrayBuffer();
+            
+            // Decode audio data from the video file
+            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+            
+            // Create a new audio blob in WAV format
+            const wavBlob = this.audioBufferToWav(audioBuffer);
+            
+            return wavBlob;
+        } catch (error) {
+            throw new Error(`Audio conversion failed: ${error.message}`);
+        }
+    }
+
+    // Convert AudioBuffer to WAV blob
+    audioBufferToWav(audioBuffer) {
+        const length = audioBuffer.length;
+        const sampleRate = audioBuffer.sampleRate;
+        const numberOfChannels = audioBuffer.numberOfChannels;
+        
+        // Create WAV header
+        const buffer = new ArrayBuffer(44 + length * numberOfChannels * 2);
+        const view = new DataView(buffer);
+        
+        // WAV header
+        const writeString = (offset, string) => {
+            for (let i = 0; i < string.length; i++) {
+                view.setUint8(offset + i, string.charCodeAt(i));
+            }
+        };
+        
+        writeString(0, 'RIFF');
+        view.setUint32(4, 36 + length * numberOfChannels * 2, true);
+        writeString(8, 'WAVE');
+        writeString(12, 'fmt ');
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true);
+        view.setUint16(22, numberOfChannels, true);
+        view.setUint32(24, sampleRate, true);
+        view.setUint32(28, sampleRate * numberOfChannels * 2, true);
+        view.setUint16(32, numberOfChannels * 2, true);
+        view.setUint16(34, 16, true);
+        writeString(36, 'data');
+        view.setUint32(40, length * numberOfChannels * 2, true);
+        
+        // Convert audio data
+        let offset = 44;
+        for (let i = 0; i < length; i++) {
+            for (let channel = 0; channel < numberOfChannels; channel++) {
+                const sample = Math.max(-1, Math.min(1, audioBuffer.getChannelData(channel)[i]));
+                view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+                offset += 2;
+            }
+        }
+        
+        return new Blob([buffer], { type: 'audio/wav' });
+    }
+
     seekFromWaveformClick(e) {
         if (!this.audioPlayer || isNaN(this.audioPlayer.duration)) return;
         const canvas = e.currentTarget;
@@ -2533,15 +2786,38 @@ class AudioToolsPro {
             this.updateProgress('Preparing audio data...', 30);
             const formData = new FormData();
             
-            // Append audio file with proper name
-            const audioFileName = this.currentFileName ? 
+            // Convert MP4 to audio-only format if needed
+            let audioBlob = this.currentAudioBlob;
+            let audioFileName = this.currentFileName ? 
                 `${this.currentFileName.replace(/\.[^/.]+$/, '')}.wav` : 
                 'timeline-audio.wav';
-            formData.append('audio', this.currentAudioBlob, audioFileName);
+            
+            // Check if we need to convert MP4 to audio format
+            if (this.currentAudioBlob.type === 'audio/mp4' || this.currentAudioBlob.type === 'video/mp4') {
+                this.log('🔄 Converting MP4 to audio-only format for backend compatibility...', 'info');
+                try {
+                    audioBlob = await this.convertToAudioFormat(this.currentAudioBlob);
+                    this.log('✅ MP4 converted to audio format successfully', 'success');
+                } catch (conversionError) {
+                    this.log(`⚠️ MP4 conversion failed, sending as-is: ${conversionError.message}`, 'warning');
+                    // Keep original blob and let backend handle it (since we added MP4 to allowed types)
+                }
+            }
+            
+            // Append audio file with proper name
+            formData.append('audio', audioBlob, audioFileName);
             
             // Append detection options
+            console.log(`🔧 Silence detection options being sent:`, silenceDetectionOptions);
             Object.keys(silenceDetectionOptions).forEach(key => {
-                formData.append(key, silenceDetectionOptions[key]);
+                console.log(`   ${key}: ${silenceDetectionOptions[key]} (${typeof silenceDetectionOptions[key]})`);
+                
+                // Handle arrays by converting to JSON string for FormData
+                if (Array.isArray(silenceDetectionOptions[key])) {
+                    formData.append(key, JSON.stringify(silenceDetectionOptions[key]));
+                } else {
+                    formData.append(key, silenceDetectionOptions[key]);
+                }
             });
 
             // Step 4: Send request to backend API
@@ -2919,6 +3195,72 @@ class AudioToolsPro {
         }
     }
 
+    async sendAudioToOverlapApi(analysisOptions = {}) {
+        try {
+            this.log('🔍 Starting backend overlap detection...', 'info');
+            this.showUIMessage('🔍 Analyzing audio overlaps via backend...', 'processing');
+            
+            if (!this.currentAudioBlob) {
+                throw new Error('No audio loaded for overlap detection');
+            }
+            
+            // Prepare FormData for backend API
+            const formData = new FormData();
+            
+            // Append audio file
+            const audioFileName = this.currentFileName ? 
+                `${this.currentFileName.replace(/\.[^/.]+$/, '')}.wav` : 
+                'timeline-audio.wav';
+            formData.append('audio', this.currentAudioBlob, audioFileName);
+            
+            // Append analysis options (matching backend validation schema)
+            const overlapOptions = {
+                sensitivity: analysisOptions.sensitivity || 5,
+                frequencyRange: analysisOptions.frequencyRange || 'full',
+                fftSize: analysisOptions.fftSize || 2048,
+                analysisMode: analysisOptions.analysisMode || 'hybrid',
+                overlapThreshold: analysisOptions.overlapThreshold || analysisOptions.threshold || 0.3,
+                minOverlapDuration: analysisOptions.minOverlapDuration || 0.1,
+                enableML: analysisOptions.enableML !== false,
+                enableCrossCorrelation: analysisOptions.enableCrossCorrelation !== false,
+                enableHarmonicAnalysis: analysisOptions.enableHarmonicAnalysis || false,
+                enableBackgroundNoiseDetection: analysisOptions.enableBackgroundNoiseDetection || analysisOptions.enableBackgroundNoise !== false
+            };
+            
+            Object.keys(overlapOptions).forEach(key => {
+                formData.append(key, overlapOptions[key]);
+            });
+            
+            // Send request to backend API
+            const backendUrl = this.getBackendUrl();
+            const apiResponse = await fetch(`${backendUrl}/api/overlap/detect`, {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (!apiResponse.ok) {
+                const errorData = await apiResponse.json().catch(() => ({}));
+                throw new Error(`Backend overlap detection API error: ${apiResponse.status} - ${errorData.message || 'Unknown error'}`);
+            }
+            
+            const overlapResponse = await apiResponse.json();
+            
+            if (!overlapResponse.success) {
+                throw new Error(overlapResponse.message || 'Backend overlap detection failed');
+            }
+            
+            this.log(`✅ Backend overlap detection completed: ${overlapResponse.results.overlaps.length} overlaps found`, 'success');
+            this.showUIMessage(`✅ Overlap detection complete! Found ${overlapResponse.results.overlaps.length} overlaps`, 'success');
+            
+            return overlapResponse;
+            
+        } catch (error) {
+            this.log(`❌ Backend overlap detection failed: ${error.message}`, 'error');
+            this.showUIMessage(`❌ Overlap detection failed: ${error.message}`, 'error');
+            throw error;
+        }
+    }
+
     resolveFFmpegPath() {
         const candidates = [];
         if (this.settings && this.settings.ffmpegPath) candidates.push(this.settings.ffmpegPath);
@@ -3191,63 +3533,14 @@ class AudioToolsPro {
     // ========================================
     // BACKEND SILENCE TRIMMING INTEGRATION
     // ========================================
-    
-    // Apply silence cuts using backend API and integrate with Premiere timeline
-    async applySilenceCuts() {
-        try {
-            this.log('✂️ Starting silence cuts application...', 'info');
-            this.showUIMessage('✂️ Applying silence cuts...', 'processing');
-            
-            // Validate we have silence results to work with
-            if (!this.lastSilenceResults || this.lastSilenceResults.length === 0) {
-                throw new Error('No silence detection results available. Please run silence detection first.');
-            }
-            
-            // Validate audio is loaded
-            if (!this.currentAudioBlob) {
-                throw new Error('No audio loaded. Please load media from timeline first.');
-            }
-            
-            this.updateProgress('Preparing silence removal...', 20);
-            
-            // Step 1: Send audio to backend for trimming
-            const trimmingOptions = this.prepareSilenceTrimmingOptions();
-            const trimResponse = await this.sendAudioToTrimmingApi(this.lastSilenceResults, trimmingOptions);
-            
-            this.updateProgress('Generating timeline markers...', 60);
-            
-            // Step 2: Create timeline markers in Premiere Pro for the silence cuts
-            const timelineMarkersResult = await this.createTimelineMarkersForSilenceCuts(this.lastSilenceResults);
-            
-            this.updateProgress('Finalizing integration...', 90);
-            
-            // Step 3: Update UI with results
-            this.displaySilenceCutsResults({
-                trimResponse,
-                timelineMarkersResult,
-                silenceSegments: this.lastSilenceResults
-            });
-            
-            this.updateProgress('Silence cuts applied', 100);
-            this.showUIMessage(`✅ Applied ${this.lastSilenceResults.length} silence cuts with timeline markers!`, 'success');
-            
-            this.log(`✅ Silence cuts application completed successfully`, 'success');
-            
-        } catch (error) {
-            this.updateProgress('Ready', 0);
-            this.showUIMessage(`❌ Failed to apply silence cuts: ${error.message}`, 'error');
-            this.log(`❌ Silence cuts application failed: ${error.message}`, 'error');
-        }
-    }
-    
     // Prepare trimming options for backend API
     prepareSilenceTrimmingOptions() {
         return {
             trimMode: 'remove', // Remove silence segments
             fadeInDuration: 0.1, // 100ms fade in
-            fadeOutDuration: 0.1, // 100ms fade out
-            compressionRatio: 0.0, // No compression, just removal
-            outputFormat: 'wav', // Keep as WAV for quality
+            fadeOutDuration: 0.1, 
+            compressionRatio: 0.0, 
+            outputFormat: 'wav',
             quality: 'high'
         };
     }
@@ -3484,47 +3777,168 @@ class AudioToolsPro {
      }
      
     // Apply silence cuts to remove detected silence from timeline
-    applySilenceCuts() {
-        console.log('🔧 applySilenceCuts() called!', this);
-        console.log('🔧 lastSilenceResults:', this.lastSilenceResults);
-        console.log('🔧 currentAudioBlob:', this.currentAudioBlob);
-        console.log('🔧 audioPlayer:', this.audioPlayer);
-        
+    // applySilenceCuts - uses backend API for silence trimming
+    async applySilenceCuts() {
         try {
+            this.log('✂️ Starting silence cuts application via backend API...', 'info');
+            this.showUIMessage('✂️ Applying silence cuts via backend...', 'processing');
+            
+            // Validate we have silence results to work with
             if (!this.lastSilenceResults || this.lastSilenceResults.length === 0) {
-                console.log('❌ No silence segments to remove');
-                this.showUIMessage('❌ No silence segments to remove', 'warning');
-                return;
+                throw new Error('No silence detection results available. Please run silence detection first.');
             }
             
-            console.log(`✂️ Applying silence cuts to ${this.lastSilenceResults.length} segments`);
-            this.log(`✂️ Applying silence cuts to ${this.lastSilenceResults.length} segments`, 'info');
-            
-            // Create a copy of the original audio for processing
-            if (!this.originalAudioBlob) {
-                this.originalAudioBlob = this.currentAudioBlob;
-                console.log('💾 Saved original audio for restoration');
-                this.log(`💾 Saved original audio for restoration`, 'info');
+            // Validate audio is loaded
+            if (!this.currentAudioBlob) {
+                throw new Error('No audio loaded. Please load media from timeline first.');
             }
             
-            // Process each silence segment
-            console.log('🔧 Processing silence removal...');
-            const processedSegments = this.processSilenceRemoval(this.lastSilenceResults);
-            console.log('🔧 Processed segments:', processedSegments);
+            this.updateProgress('Preparing silence removal...', 20);
             
-            // Store processed segments for preview
-            this.processedAudioSegments = processedSegments;
+        // Step 1: Send audio to backend for trimming
+        const trimmingOptions = this.prepareSilenceTrimmingOptions();
+        const trimResponse = await this.sendAudioToTrimmingApi(this.lastSilenceResults, trimmingOptions);
+        
+        // Store for download functionality
+        this.lastTrimResponse = trimResponse;
+        
+        this.updateProgress('Generating timeline markers...', 60);            // Step 2: Create timeline markers in Premiere Pro for the silence cuts
+            const timelineMarkersResult = await this.createTimelineMarkersForSilenceCuts(this.lastSilenceResults);
             
-            // Create new audio without silence
-            console.log('🔧 Creating silence-free audio...');
-            this.createSilenceFreeAudio(processedSegments);
+            this.updateProgress('Finalizing integration...', 90);
+            
+            // Step 3: Update UI with results
+            this.displaySilenceCutsResults({
+                trimResponse,
+                timelineMarkersResult,
+                silenceSegments: this.lastSilenceResults
+            });
+            
+            this.updateProgress('Silence cuts applied', 100);
+            this.showUIMessage(`✅ Applied ${this.lastSilenceResults.length} silence cuts with timeline markers!`, 'success');
+            
+            this.log(`✅ Silence cuts application completed successfully`, 'success');
             
         } catch (error) {
-            console.error('❌ Error in applySilenceCuts:', error);
-            this.log(`❌ Error applying silence cuts: ${error.message}`, 'error');
-            this.showUIMessage('❌ Failed to apply silence cuts', 'error');
+            this.updateProgress('Ready', 0);
+            this.showUIMessage(`❌ Failed to apply silence cuts: ${error.message}`, 'error');
+            this.log(`❌ Silence cuts application failed: ${error.message}`, 'error');
         }
     }
+     
+     // Display silence cuts results after backend processing
+     displaySilenceCutsResults(data) {
+         this.log('📊 Displaying silence cuts results...', 'info');
+         
+         try {
+             const { trimResponse, timelineMarkersResult, silenceSegments } = data;
+             
+             // Show success summary
+             const summary = `
+                 <div class="silence-cuts-results">
+                     <div class="results-header">
+                         <h3><i class="fas fa-check-circle text-success"></i> Silence Cuts Applied Successfully!</h3>
+                     </div>
+                     <div class="results-summary">
+                         <div class="summary-item">
+                             <span class="label">Segments Processed:</span>
+                             <span class="value">${silenceSegments.length}</span>
+                         </div>
+                         <div class="summary-item">
+                             <span class="label">Original Duration:</span>
+                             <span class="value">${trimResponse.originalDuration ? this.formatTime(trimResponse.originalDuration) : 'N/A'}</span>
+                         </div>
+                         <div class="summary-item">
+                             <span class="label">Trimmed Duration:</span>
+                             <span class="value">${trimResponse.trimmedDuration ? this.formatTime(trimResponse.trimmedDuration) : 'N/A'}</span>
+                         </div>
+                         <div class="summary-item">
+                             <span class="label">Time Saved:</span>
+                             <span class="value">${trimResponse.originalDuration && trimResponse.trimmedDuration ? this.formatTime(trimResponse.originalDuration - trimResponse.trimmedDuration) : 'N/A'}</span>
+                         </div>
+                         <div class="summary-item">
+                             <span class="label">Timeline Markers:</span>
+                             <span class="value">${timelineMarkersResult.markersCreated || 0} created</span>
+                         </div>
+                     </div>
+                     <div class="results-actions">
+                         <button class="btn-primary" onclick="window.audioToolsPro && window.audioToolsPro.downloadTrimmedAudio && window.audioToolsPro.downloadTrimmedAudio()">
+                             <i class="fas fa-download"></i> Download Trimmed Audio
+                         </button>
+                     </div>
+                 </div>
+             `;
+             
+             // Update the results area
+             const resultsArea = document.getElementById('resultsArea');
+             if (resultsArea) {
+                 resultsArea.innerHTML = summary;
+                 resultsArea.style.display = 'block';
+             }
+             
+             // Show in appropriate tab
+             this.activateResultsTab('silence');
+             
+             this.log('✅ Silence cuts results displayed successfully', 'success');
+             
+         } catch (error) {
+             this.log(`❌ Error displaying silence cuts results: ${error.message}`, 'error');
+             this.showUIMessage(`❌ Error displaying results: ${error.message}`, 'error');
+         }
+     }
+     
+     // Download trimmed audio file
+     async downloadTrimmedAudio() {
+         try {
+             this.log('📥 Downloading trimmed audio...', 'info');
+             this.showUIMessage('📥 Preparing download...', 'processing');
+             
+             // Check if we have a recent trim response with download URL
+             if (this.lastTrimResponse && this.lastTrimResponse.downloadUrl) {
+                 // Create download link
+                 const link = document.createElement('a');
+                 link.href = this.lastTrimResponse.downloadUrl;
+                 link.download = `trimmed_audio_${Date.now()}.wav`;
+                 document.body.appendChild(link);
+                 link.click();
+                 document.body.removeChild(link);
+                 
+                 this.log('✅ Download started successfully', 'success');
+                 this.showUIMessage('✅ Download started!', 'success');
+                 
+             } else {
+                 // Fallback: request download from backend
+                 const response = await fetch('http://localhost:3000/api/silence/download-last', {
+                     method: 'GET'
+                 });
+                 
+                 if (!response.ok) {
+                     throw new Error(`Download failed: ${response.status}`);
+                 }
+                 
+                 // Create blob and download
+                 const blob = await response.blob();
+                 const url = URL.createObjectURL(blob);
+                 
+                 const link = document.createElement('a');
+                 link.href = url;
+                 link.download = `trimmed_audio_${Date.now()}.wav`;
+                 document.body.appendChild(link);
+                 link.click();
+                 document.body.removeChild(link);
+                 
+                 // Clean up
+                 URL.revokeObjectURL(url);
+                 
+                 this.log('✅ Download completed successfully', 'success');
+                 this.showUIMessage('✅ Audio download completed!', 'success');
+             }
+             
+         } catch (error) {
+             this.log(`❌ Download failed: ${error.message}`, 'error');
+             this.showUIMessage(`❌ Download failed: ${error.message}`, 'error');
+         }
+     }
      
      // Process silence removal from timeline
      processSilenceRemoval(silenceResults) {
@@ -7131,9 +7545,38 @@ Format your response as JSON with this structure:
         `;
     }
     
-    // Export trimmed media (placeholder)
-    exportTrimmedMedia() {
-        this.showUIMessage('🔄 Export functionality coming soon...', 'info');
+    // Export trimmed media (now uses backend API)
+    async exportTrimmedMedia() {
+        try {
+            this.log('📥 Exporting trimmed media via backend...', 'info');
+            this.showUIMessage('� Preparing trimmed audio for download...', 'processing');
+            
+            // First check if we have silence results to process
+            if (!this.lastSilenceResults || this.lastSilenceResults.length === 0) {
+                this.showUIMessage('⚠️ No silence detection results available. Run silence detection first.', 'warning');
+                return;
+            }
+            
+            // Check if we have audio loaded
+            if (!this.currentAudioBlob) {
+                this.showUIMessage('⚠️ No audio loaded. Please load media first.', 'warning');
+                return;
+            }
+            
+            // Use backend API to trim the audio
+            const trimmingOptions = this.prepareSilenceTrimmingOptions();
+            const trimResponse = await this.sendAudioToTrimmingApi(this.lastSilenceResults, trimmingOptions);
+            
+            // Store for download functionality
+            this.lastTrimResponse = trimResponse;
+            
+            // Now download the processed audio
+            await this.downloadTrimmedAudio();
+            
+        } catch (error) {
+            this.log(`❌ Export failed: ${error.message}`, 'error');
+            this.showUIMessage(`❌ Export failed: ${error.message}`, 'error');
+        }
     }
     
     // Reset to original (placeholder)
@@ -14622,56 +15065,69 @@ AudioToolsPro.prototype.cleanupAudioNodes = function() {
 // Comprehensive Audio Overlap Detection - Unified Implementation
 AudioToolsPro.prototype.runComprehensiveOverlapDetection = async function() {
     try {
-        this.log('🔍 Starting Comprehensive Audio Overlap Detection...', 'info');
-        this.showUIMessage('🔍 Analyzing audio for overlaps...', 'processing');
+        this.log('🔍 Starting Comprehensive Audio Overlap Detection via Backend...', 'info');
+        this.showUIMessage('🔍 Analyzing audio for overlaps via backend...', 'processing');
         
         // Show progress panel
         this.showOverlapProgressPanel();
         
-        // Get audio data for analysis
-        const audioData = await this.getAudioForOverlapAnalysis();
-        if (!audioData) {
+        // Validate audio availability
+        if (!this.currentAudioBlob) {
             throw new Error('No audio available for overlap analysis');
         }
         
         // Update progress
-        this.updateOverlapProgress('Initializing analysis...', 10);
+        this.updateOverlapProgress('Sending audio to backend for analysis...', 10);
         
-        // Step 1: Frequency-domain analysis
-        this.updateOverlapProgress('Running frequency analysis...', 25);
-        const frequencyOverlaps = await this.performFrequencyDomainAnalysis(audioData);
+        // Configure analysis options based on current settings (matching backend schema)
+        const analysisOptions = {
+            sensitivity: this.overlapDetectionConfig?.sensitivity || 5,
+            frequencyRange: this.overlapDetectionConfig?.frequencyRange || 'full',
+            fftSize: this.overlapDetectionConfig?.fftSize || 2048,
+            analysisMode: this.overlapDetectionConfig?.analysisMode || 'hybrid',
+            overlapThreshold: this.overlapDetectionConfig?.overlapDetectionThreshold || 0.3,
+            minOverlapDuration: this.overlapDetectionConfig?.minOverlapDuration || 0.1,
+            enableML: this.overlapDetectionConfig?.enableML !== false,
+            enableCrossCorrelation: this.overlapDetectionConfig?.enableCrossCorrelation !== false,
+            enableHarmonicAnalysis: this.overlapDetectionConfig?.enableHarmonicAnalysis || false,
+            enableBackgroundNoiseDetection: this.overlapDetectionConfig?.enableBackgroundNoiseDetection !== false
+        };
         
-        // Step 2: Cross-correlation analysis
-        this.updateOverlapProgress('Running cross-correlation...', 50);
-        const correlationOverlaps = await this.performCrossCorrelationAnalysis(audioData);
+        // Update progress
+        this.updateOverlapProgress('Backend analyzing audio patterns...', 50);
         
-        // Step 3: Background noise detection
-        this.updateOverlapProgress('Detecting background noise...', 75);
-        const noiseOverlaps = await this.detectBackgroundNoiseOverlaps(audioData);
+        // Call backend API for overlap detection
+        const overlapResponse = await this.sendAudioToOverlapApi(analysisOptions);
         
-        // Step 4: Merge and validate results
-        this.updateOverlapProgress('Finalizing results...', 90);
-        const allOverlaps = [...frequencyOverlaps, ...correlationOverlaps, ...noiseOverlaps];
-        const mergedOverlaps = this.mergeOverlapResults(allOverlaps);
+        // Update progress
+        this.updateOverlapProgress('Processing backend results...', 85);
         
-        // Display results with enhanced UI
-        this.displayComprehensiveOverlapResults(mergedOverlaps);
+        // Extract overlap results from backend response
+        const overlaps = overlapResponse.results?.overlaps || [];
+        
+        // Store results for later use
+        this.lastOverlapResults = overlaps;
+        
+        // Update progress
+        this.updateOverlapProgress('Finalizing results...', 95);
+        
+        // Display results with enhanced UI (using backend data)
+        this.displayComprehensiveOverlapResults(overlaps);
         
         // Hide progress panel
         this.hideOverlapProgressPanel();
         
         // Enable resolution buttons with safety check
         try {
-            this.enableOverlapResolutionControls(mergedOverlaps.length > 0);
+            this.enableOverlapResolutionControls(overlaps.length > 0);
         } catch (error) {
             this.log(`⚠️ Failed to enable resolution controls: ${error.message}`, 'warning');
-            // Diagnostic functionality removed for cleaner UI
         }
         
-        this.log(`✅ Overlap detection completed - found ${mergedOverlaps.length} overlaps`, 'success');
-        this.showUIMessage(`✅ Analysis complete! Found ${mergedOverlaps.length} overlaps`, 'success');
+        this.log(`✅ Backend overlap detection completed - found ${overlaps.length} overlaps`, 'success');
+        this.showUIMessage(`✅ Backend analysis complete! Found ${overlaps.length} overlaps`, 'success');
         
-        return mergedOverlaps;
+        return overlaps;
         
     } catch (error) {
         this.log(`❌ Comprehensive overlap detection failed: ${error.message}`, 'error');
@@ -14680,6 +15136,12 @@ AudioToolsPro.prototype.runComprehensiveOverlapDetection = async function() {
         throw error;
     }
 };
+
+// ======================================================================
+// DEPRECATED CLIENT-SIDE AUDIO PROCESSING FUNCTIONS
+// These functions are no longer used since migration to backend APIs
+// Kept for reference only - all overlap detection now uses backend
+// ======================================================================
 
 // Get audio data for overlap analysis
 AudioToolsPro.prototype.getAudioForOverlapAnalysis = async function() {
@@ -17767,17 +18229,6 @@ AudioToolsPro.prototype.detectOverlaps = async function() {
     }
 };
 
-/**
- * Resolve overlaps by applying automatic ducking to music buffer
- * @param {Array} overlaps - Array of overlap objects
- * @param {AudioBuffer} musicBuffer - Music buffer to apply ducking to
- * @returns {AudioBuffer} Modified music buffer with ducking applied
- */
-// Removed redundant resolveOverlaps function - now using enhanced overlap detection system
-
-// Removed calculateDuckAmount function - now using enhanced overlap detection system
-
-// Removed applyDuckingToRegion function - now using enhanced overlap detection system
 
 /**
  * Play a specific overlap segment using Web Audio API
@@ -23345,67 +23796,6 @@ AudioToolsPro.prototype.updateLoadedMediaUI = function(clipInfo) {
         element.style.display = 'block';
         element.style.opacity = '1';
     });
-};
-
-// Update load button state for visual feedback
-AudioToolsPro.prototype.updateLoadButtonState = function(state) {
-    const loadBtn = document.getElementById('loadMediaBtn');
-    if (!loadBtn) return;
-    
-    // Reset button classes
-    loadBtn.classList.remove('loading', 'success', 'error');
-    
-    switch(state) {
-        case 'loading':
-            loadBtn.classList.add('loading');
-            loadBtn.innerHTML = `
-                <div style="display: flex; align-items: center; gap: 6px;">
-                    <div class="spinner" style="width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-top: 2px solid white; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                    Loading...
-                </div>
-            `;
-            loadBtn.disabled = true;
-            break;
-            
-        case 'success':
-            loadBtn.classList.add('success');
-            loadBtn.innerHTML = `
-                <div style="display: flex; align-items: center; gap: 6px;">
-                    <span style="color: #4CAF50;">✓</span>
-                    Loaded
-                </div>
-            `;
-            // Reset to normal after 2 seconds
-            setTimeout(() => {
-                if (loadBtn.classList.contains('success')) {
-                    this.updateLoadButtonState('normal');
-                }
-            }, 2000);
-            break;
-            
-        case 'error':
-            loadBtn.classList.add('error');
-            loadBtn.innerHTML = `
-                <div style="display: flex; align-items: center; gap: 6px;">
-                    <span style="color: #f44336;">✗</span>
-                    Error
-                </div>
-            `;
-            loadBtn.disabled = false;
-            // Reset to normal after 3 seconds
-            setTimeout(() => {
-                if (loadBtn.classList.contains('error')) {
-                    this.updateLoadButtonState('normal');
-                }
-            }, 3000);
-            break;
-            
-        case 'normal':
-        default:
-            loadBtn.innerHTML = '📁 Load Media';
-            loadBtn.disabled = false;
-            break;
-    }
 };
 
 // ========================================

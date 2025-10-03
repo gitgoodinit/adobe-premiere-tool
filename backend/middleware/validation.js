@@ -13,14 +13,18 @@ const schemas = {
         minDuration: Joi.number().min(0.1).max(10).optional(),
         confidenceThreshold: Joi.number().min(0).max(1).optional(),
         enableAI: Joi.boolean().optional(),
-        enablePreprocessing: Joi.boolean().optional()
+        enablePreprocessing: Joi.boolean().optional(),
+        pauseThreshold: Joi.number().min(-60).max(0).optional(),
+        pauseMinDuration: Joi.number().min(0.1).max(10).optional()
     }),
 
     silenceTrimming: Joi.object({
         silenceSegments: Joi.array().items(Joi.object({
             start: Joi.number().min(0).required(),
             end: Joi.number().min(0).required(),
-            duration: Joi.number().min(0).required()
+            duration: Joi.number().min(0).required(),
+            method: Joi.string().optional(),
+            confidence: Joi.number().min(0).max(1).optional()
         })).optional(),
         trimMode: Joi.string().valid('remove', 'fade', 'compress').optional(),
         fadeInDuration: Joi.number().min(0).max(5).optional(),
