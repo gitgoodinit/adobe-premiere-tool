@@ -592,13 +592,40 @@ class AudioToolsPro {
                         const response = await fetch(fileUrl);
                         if (response.ok) {
                             audioBlob = await response.blob();
-                            this.currentAudioBlob = audioBlob;
-                            this.log(`✅ Audio blob prepared for backend: ${(audioBlob.size / 1024).toFixed(1)}KB`, 'success');
                             
-                            // Set up audio player for preview
-                            const audioUrl = URL.createObjectURL(audioBlob);
-                            if (this.audioPlayer) {
-                                this.audioPlayer.src = audioUrl;
+                            // Determine if this is a video file
+                            const isVideoFile = audioBlob.type.startsWith('video/') || 
+                                              audioFilePath.toLowerCase().match(/\.(mp4|avi|mov|mkv|webm|m4v)$/);
+                            
+                            if (isVideoFile) {
+                                this.currentVideoBlob = audioBlob;
+                                this.currentVideoPath = audioFilePath;
+                                this.log(`✅ Video blob prepared: ${(audioBlob.size / 1024).toFixed(1)}KB`, 'success');
+                                
+                                // Set up video player
+                                const videoUrl = URL.createObjectURL(audioBlob);
+                                if (this.videoPlayer) {
+                                    this.videoPlayer.src = videoUrl;
+                                    this.log('🎥 Video loaded into video player', 'success');
+                                }
+                                
+                                // Set up audio player for waveform only (muted to prevent double audio)
+                                this.currentAudioBlob = audioBlob;
+                                if (this.audioPlayer) {
+                                    this.audioPlayer.src = videoUrl;
+                                    this.audioPlayer.muted = true; // MUTE to prevent double audio
+                                    this.audioPlayer.volume = 0; // Ensure no audio output
+                                    this.log('🔇 Audio player muted for waveform visualization only', 'info');
+                                }
+                            } else {
+                                this.currentAudioBlob = audioBlob;
+                                this.log(`✅ Audio blob prepared for backend: ${(audioBlob.size / 1024).toFixed(1)}KB`, 'success');
+                                
+                                // Set up audio player for preview
+                                const audioUrl = URL.createObjectURL(audioBlob);
+                                if (this.audioPlayer) {
+                                    this.audioPlayer.src = audioUrl;
+                                }
                             }
                         } else {
                             this.log(`⚠️ Failed to load audio file: ${response.status} ${response.statusText}`, 'warning');
@@ -643,20 +670,24 @@ class AudioToolsPro {
                 }
             }
             
-            // Show audio player section
-            const audioSection = document.getElementById('audioPlayerSection');
-            if (audioSection) {
-                audioSection.style.display = 'block';
-                audioSection.style.opacity = '0';
-                audioSection.style.transform = 'translateY(20px)';
-                setTimeout(() => {
-                    audioSection.style.transition = 'all 0.5s ease';
-                    audioSection.style.opacity = '1';
-                    audioSection.style.transform = 'translateY(0)';
-                }, 100);
-            }
-            
-            // Enable audio-dependent buttons
+                // Show unified player section
+                const unifiedPlayerSection = document.getElementById('unifiedMediaPlayerSection');
+                if (unifiedPlayerSection) {
+                    unifiedPlayerSection.style.display = 'block';
+                    unifiedPlayerSection.style.opacity = '0';
+                    unifiedPlayerSection.style.transform = 'translateY(20px)';
+                    setTimeout(() => {
+                        unifiedPlayerSection.style.transition = 'all 0.5s ease';
+                        unifiedPlayerSection.style.opacity = '1';
+                        unifiedPlayerSection.style.transform = 'translateY(0)';
+                    }, 100);
+                }
+                
+                // Hide old audio player section
+                const audioSection = document.getElementById('audioPlayerSection');
+                if (audioSection) {
+                    audioSection.style.display = 'none';
+                }            // Enable audio-dependent buttons
             this.enableAudioDependentButtons();
             
             // Make applySilenceCuts globally accessible
@@ -1358,7 +1389,7 @@ class AudioToolsPro {
             this.setupUI();
             this.setupEventListeners();
             this.setupFeatureTabs();
-            this.setupAudioPlayer();
+            this.setupUnifiedMediaPlayer();
             this.setupRealtimeText();
             
             // Setup enhanced overlap detection UI
@@ -1872,55 +1903,197 @@ class AudioToolsPro {
     // AUDIO EXTRACTION & PLAYBACK
     // ========================================
     
-    setupAudioPlayer() {
+    setupUnifiedMediaPlayer() {
         this.audioPlayer = document.getElementById('audioPlayer');
         this.videoPlayer = document.getElementById('videoPlayer');
+        this.unifiedPlayerContainer = document.getElementById('unifiedMediaPlayerSection');
+        this.currentMediaType = 'none'; // 'audio', 'video', or 'none'
+        this.isPlaying = false;
+        this.isDraggingProgress = false;
+        this.playbackRate = 1.0;
         
+        if (!this.audioPlayer || !this.videoPlayer) {
+            this.log('⚠️ Media player elements not found', 'warning');
+            return;
+        }
+        
+        this.log('🎵 Setting up unified media player...', 'info');
+        
+        // Setup unified controls
+        this.setupUnifiedControls();
+        
+        // Setup media event listeners
+        this.setupMediaEventListeners();
+        
+        // Setup progress tracking
+        this.setupProgressTracking();
+        
+        // Setup volume control
+        this.setupVolumeControl();
+        
+        // Setup waveform interactions
+        this.setupWaveformInteractions();
+        
+        // Initialize volume
+        const volumeSlider = document.getElementById('volumeSlider');
+        if (volumeSlider) {
+            const initialVolume = parseInt(volumeSlider.value) / 100;
+            this.setVolume(initialVolume);
+        }
+        
+        this.log('✅ Unified media player setup complete', 'success');
+    }
+    
+    setupUnifiedControls() {
+        // Play/Pause button
+        const playPauseBtn = document.getElementById('playPause');
+        if (playPauseBtn) {
+            playPauseBtn.addEventListener('click', () => this.togglePlayPause());
+        }
+        
+        // Stop button  
+        const stopBtn = document.getElementById('stopMedia');
+        if (stopBtn) {
+            stopBtn.addEventListener('click', () => this.stopMedia());
+        }
+        
+        // Seek buttons
+        const seekBackwardBtn = document.getElementById('seekBackward');
+        const seekForwardBtn = document.getElementById('seekForward');
+        if (seekBackwardBtn) {
+            seekBackwardBtn.addEventListener('click', () => this.seekRelative(-10));
+        }
+        if (seekForwardBtn) {
+            seekForwardBtn.addEventListener('click', () => this.seekRelative(10));
+        }
+        
+        // Loop toggle
+        const loopBtn = document.getElementById('loopToggle');
+        if (loopBtn) {
+            loopBtn.addEventListener('click', () => this.toggleLoop());
+        }
+        
+        // Speed control
+        const speedBtn = document.getElementById('speedBtn');
+        if (speedBtn) {
+            speedBtn.addEventListener('click', () => this.cyclePlaybackSpeed());
+        }
+        
+        // Player mode toggle
+        const toggleModeBtn = document.getElementById('togglePlayerMode');
+        if (toggleModeBtn) {
+            toggleModeBtn.addEventListener('click', () => this.togglePlayerMode());
+        }
+    }
+    
+    togglePlayerMode() {
+        if (this.currentMediaType === 'video' && this.audioPlayer && this.audioPlayer.src) {
+            // Switch to audio-only mode
+            this.switchToAudioMode();
+            this.showUIMessage('🎵 Switched to audio-only mode', 'info');
+        } else if (this.currentMediaType === 'audio' && this.videoPlayer && this.videoPlayer.src) {
+            // Switch to video mode
+            this.switchToVideoMode();
+            this.synchronizeVideoAudio();
+            this.showUIMessage('🎥 Switched to video mode', 'info');
+        } else {
+            this.showUIMessage('⚠️ Cannot switch modes - only one media type available', 'warning');
+        }
+    }
+    
+    setupMediaEventListeners() {
+        // Audio player events
         if (this.audioPlayer) {
-            // Audio player event listeners
-            this.attachListener('playPause', () => this.togglePlayPause());
-            this.attachListener('stopAudio', () => this.stopAudio());
-            this.attachListener('loopToggle', () => this.toggleLoop());
+            this.audioPlayer.addEventListener('loadedmetadata', () => this.onMediaLoaded('audio'));
+            this.audioPlayer.addEventListener('timeupdate', () => this.onTimeUpdate());
+            this.audioPlayer.addEventListener('ended', () => this.onMediaEnded());
+            this.audioPlayer.addEventListener('play', () => this.onMediaPlay());
+            this.audioPlayer.addEventListener('pause', () => this.onMediaPause());
+            this.audioPlayer.addEventListener('error', (e) => this.onMediaError(e, 'audio'));
+        }
+        
+        // Video player events
+        if (this.videoPlayer) {
+            this.videoPlayer.addEventListener('loadedmetadata', () => this.onMediaLoaded('video'));
+            this.videoPlayer.addEventListener('timeupdate', () => this.onTimeUpdate());
+            this.videoPlayer.addEventListener('ended', () => this.onMediaEnded());
+            this.videoPlayer.addEventListener('play', () => this.onMediaPlay());
+            this.videoPlayer.addEventListener('pause', () => this.onMediaPause());
+            this.videoPlayer.addEventListener('error', (e) => this.onMediaError(e, 'video'));
+        }
+    }
+    
+    setupProgressTracking() {
+        const progressContainer = document.getElementById('progressContainer');
+        if (progressContainer) {
+            progressContainer.addEventListener('click', (e) => this.seekFromProgressClick(e));
             
-            // Audio element events
-            this.audioPlayer.addEventListener('loadedmetadata', () => this.updateAudioInfo());
-            this.audioPlayer.addEventListener('timeupdate', () => this.updateAudioTime());
-            this.audioPlayer.addEventListener('ended', () => this.onAudioEnded());
-            
-            // Volume control
-            const volumeSlider = document.getElementById('volumeSlider');
-            if (volumeSlider) {
-                volumeSlider.addEventListener('input', (e) => {
-                    const volume = e.target.value / 100;
-                    this.audioPlayer.volume = volume;
-                    this.videoPlayer.volume = volume;
-                    this.updateVolumeIcon(volume);
-                });
-                
-                // Initialize volume
-                volumeSlider.value = this.audioPlayer.volume * 100;
-                this.updateVolumeIcon(this.audioPlayer.volume);
-            }
-            
-            // Waveform interactions
-            const wf = document.getElementById('waveformCanvas');
-            if (wf) {
-                wf.addEventListener('click', (e) => this.seekFromWaveformClick(e));
-                
-                // Setup visual trimming
-                this.setupVisualTrimming();
+            // Progress handle dragging
+            const progressHandle = document.getElementById('progressHandle');
+            if (progressHandle) {
+                progressHandle.addEventListener('mousedown', (e) => this.startProgressDrag(e));
+                document.addEventListener('mousemove', (e) => this.onProgressDrag(e));
+                document.addEventListener('mouseup', () => this.endProgressDrag());
             }
         }
-
-        // Optional: hook video events for status display
-        if (this.videoPlayer) {
-            this.videoPlayer.addEventListener('loadedmetadata', () => {
-                const info = document.getElementById('videoInfo');
-                if (info) {
-                    const dur = isNaN(this.videoPlayer.duration) ? 0 : this.videoPlayer.duration;
-                    info.textContent = `Duration: ${this.formatTime(dur)}`;
+    }
+    
+    setupVolumeControl() {
+        const volumeSlider = document.getElementById('volumeSlider');
+        const volumeBtn = document.getElementById('volumeBtn');
+        
+        if (volumeSlider) {
+            volumeSlider.addEventListener('input', (e) => {
+                const volume = parseInt(e.target.value) / 100;
+                this.setVolume(volume);
+                this.updateVolumeUI(volume);
+            });
+        }
+        
+        if (volumeBtn) {
+            volumeBtn.addEventListener('click', () => this.toggleMute());
+        }
+    }
+    
+    setupWaveformInteractions() {
+        const waveformCanvas = document.getElementById('waveformCanvas');
+        if (waveformCanvas) {
+            // Add click handler for seeking
+            waveformCanvas.addEventListener('click', (e) => this.seekFromWaveformClick(e));
+            
+            // Add drag functionality for waveform scrubbing
+            let isDragging = false;
+            
+            waveformCanvas.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                waveformCanvas.style.cursor = 'grabbing';
+                this.isDraggingProgress = true; // Prevent time updates during drag
+                this.seekFromWaveformClick(e); // Immediate seek on mouse down
+            });
+            
+            waveformCanvas.addEventListener('mousemove', (e) => {
+                if (isDragging) {
+                    this.seekFromWaveformClick(e); // Continuous seeking while dragging
                 }
             });
+            
+            const stopDrag = () => {
+                if (isDragging) {
+                    isDragging = false;
+                    waveformCanvas.style.cursor = 'pointer';
+                    this.isDraggingProgress = false; // Re-enable time updates
+                }
+            };
+            
+            waveformCanvas.addEventListener('mouseup', stopDrag);
+            waveformCanvas.addEventListener('mouseleave', stopDrag);
+            
+            // Set cursor style
+            waveformCanvas.style.cursor = 'pointer';
+            
+            this.log('✅ Waveform interaction setup complete with drag support', 'success');
+        } else {
+            this.log('⚠️ Waveform canvas not found', 'warning');
         }
     }
     
@@ -2316,37 +2489,508 @@ class AudioToolsPro {
         return arrayBuffer;
     }
     
+    // ========================================
+    // UNIFIED MEDIA PLAYER CONTROLS
+    // ========================================
+    
     togglePlayPause() {
-        if (!this.audioPlayer || !this.currentAudioBlob) return;
+        if (!this.hasLoadedMedia()) {
+            this.showUIMessage('⚠️ No media loaded', 'warning');
+            return;
+        }
         
         const playPauseBtn = document.getElementById('playPause');
-        const icon = playPauseBtn.querySelector('i');
+        const icon = playPauseBtn?.querySelector('i');
         
-        if (this.audioPlayer.paused) {
-            this.audioPlayer.play();
-            icon.className = 'fas fa-pause';
-            playPauseBtn.classList.add('active');
-            this.log('▶️ Audio playback started', 'info');
+        if (this.isPlaying) {
+            this.pauseMedia();
+            if (icon) icon.className = 'fas fa-play';
+            playPauseBtn?.classList.remove('playing');
+            this.log('⏸️ Media paused', 'info');
         } else {
-            this.audioPlayer.pause();
-            icon.className = 'fas fa-play';
-            playPauseBtn.classList.remove('active');
-            this.log('⏸️ Audio playback paused', 'info');
+            this.playMedia();
+            if (icon) icon.className = 'fas fa-pause';
+            playPauseBtn?.classList.add('playing');
+            this.log('▶️ Media playing', 'info');
         }
     }
     
-    stopAudio() {
-        if (!this.audioPlayer) return;
-        
-        this.audioPlayer.pause();
-        this.audioPlayer.currentTime = 0;
+    playMedia() {
+        if (this.currentMediaType === 'video' && this.videoPlayer) {
+            // For video files, only play the video (audio is included)
+            this.videoPlayer.play().catch(e => this.log(`Video play error: ${e.message}`, 'warning'));
+            // Keep audio player muted but synced for waveform
+            if (this.audioPlayer && this.audioPlayer.muted) {
+                this.audioPlayer.play().catch(e => this.log(`Audio sync error: ${e.message}`, 'warning'));
+            }
+        } else if (this.currentMediaType === 'audio' && this.audioPlayer) {
+            // For audio-only files, play the audio player
+            this.audioPlayer.muted = false; // Ensure audio is not muted for audio files
+            this.audioPlayer.play().catch(e => this.log(`Audio play error: ${e.message}`, 'warning'));
+        }
+        this.isPlaying = true;
+    }
+    
+    pauseMedia() {
+        if (this.currentMediaType === 'video' && this.videoPlayer) {
+            this.videoPlayer.pause();
+        }
+        if (this.audioPlayer) {
+            this.audioPlayer.pause();
+        }
+        this.isPlaying = false;
+    }
+    
+    stopMedia() {
+        this.pauseMedia();
+        this.seekToTime(0);
         
         const playPauseBtn = document.getElementById('playPause');
-        const icon = playPauseBtn.querySelector('i');
-        icon.className = 'fas fa-play';
-        playPauseBtn.classList.remove('active');
+        const icon = playPauseBtn?.querySelector('i');
+        if (icon) icon.className = 'fas fa-play';
+        playPauseBtn?.classList.remove('playing');
         
-        this.log('⏹️ Audio playback stopped', 'info');
+        this.log('⏹️ Media stopped', 'info');
+    }
+    
+    seekToTime(timeInSeconds) {
+        if (!this.hasLoadedMedia()) return;
+        
+        const duration = this.getMediaDuration();
+        const clampedTime = Math.max(0, Math.min(duration, timeInSeconds));
+        
+        if (this.currentMediaType === 'video' && this.videoPlayer) {
+            this.videoPlayer.currentTime = clampedTime;
+        }
+        if (this.audioPlayer) {
+            this.audioPlayer.currentTime = clampedTime;
+        }
+        
+        this.updateAllProgressIndicators();
+    }
+    
+    seekRelative(deltaSeconds) {
+        const currentTime = this.getCurrentTime();
+        this.seekToTime(currentTime + deltaSeconds);
+    }
+    
+    toggleLoop() {
+        const loopBtn = document.getElementById('loopToggle');
+        const isLooping = this.audioPlayer?.loop || false;
+        const newLoopState = !isLooping;
+        
+        if (this.audioPlayer) this.audioPlayer.loop = newLoopState;
+        if (this.videoPlayer) this.videoPlayer.loop = newLoopState;
+        
+        if (loopBtn) {
+            if (newLoopState) {
+                loopBtn.classList.add('active');
+                this.log('🔄 Loop enabled', 'info');
+            } else {
+                loopBtn.classList.remove('active');
+                this.log('🔄 Loop disabled', 'info');
+            }
+        }
+    }
+    
+    setVolume(volume) {
+        const clampedVolume = Math.max(0, Math.min(1, volume));
+        
+        // Only set volume on the active player to prevent conflicts
+        if (this.currentMediaType === 'video' && this.videoPlayer) {
+            this.videoPlayer.volume = clampedVolume;
+            // Keep audio player muted for waveform
+            if (this.audioPlayer) {
+                this.audioPlayer.volume = 0;
+                this.audioPlayer.muted = true;
+            }
+        } else if (this.currentMediaType === 'audio' && this.audioPlayer) {
+            this.audioPlayer.volume = clampedVolume;
+            this.audioPlayer.muted = false;
+        }
+        
+        this.currentVolume = clampedVolume;
+        this.updateVolumeUI(clampedVolume);
+    }
+    
+    toggleMute() {
+        const volumeBtn = document.getElementById('volumeBtn');
+        const volumeSlider = document.getElementById('volumeSlider');
+        
+        if (this.currentVolume > 0) {
+            this.previousVolume = this.currentVolume;
+            this.setVolume(0);
+            if (volumeSlider) volumeSlider.value = 0;
+        } else {
+            const restoreVolume = this.previousVolume || 0.7;
+            this.setVolume(restoreVolume);
+            if (volumeSlider) volumeSlider.value = restoreVolume * 100;
+        }
+    }
+    
+    cyclePlaybackSpeed() {
+        const speeds = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
+        const currentIndex = speeds.indexOf(this.playbackRate);
+        const nextIndex = (currentIndex + 1) % speeds.length;
+        this.playbackRate = speeds[nextIndex];
+        
+        if (this.audioPlayer) this.audioPlayer.playbackRate = this.playbackRate;
+        if (this.videoPlayer) this.videoPlayer.playbackRate = this.playbackRate;
+        
+        const speedText = document.getElementById('speedText');
+        if (speedText) speedText.textContent = `${this.playbackRate}x`;
+        
+        this.log(`⏩ Playback speed: ${this.playbackRate}x`, 'info');
+    }
+    
+    togglePlayerMode() {
+        if (this.currentMediaType === 'video') {
+            this.switchToAudioMode();
+        } else {
+            // Try to switch to video mode if video is available
+            if (this.videoPlayer && this.videoPlayer.src) {
+                this.switchToVideoMode();
+            } else {
+                this.showUIMessage('⚠️ No video available', 'warning');
+            }
+        }
+    }
+    
+    // ========================================
+    // UNIFIED MEDIA PLAYER EVENT HANDLERS
+    // ========================================
+    
+    onMediaLoaded(mediaType) {
+        this.log(`🎵 ${mediaType} metadata loaded`, 'info');
+        
+        // Determine media type based on what's loaded
+        if (mediaType === 'video' || (this.videoPlayer && this.videoPlayer.src && this.videoPlayer.duration)) {
+            this.currentMediaType = 'video';
+            this.switchToVideoMode();
+            this.log('🎥 Switched to video mode with video player', 'info');
+        } else {
+            this.currentMediaType = 'audio';
+            this.switchToAudioMode();
+            this.log('🎵 Using audio-only mode', 'info');
+        }
+        
+        this.updateMediaInfo();
+        this.updateAllProgressIndicators();
+        this.showUnifiedPlayer();
+        
+        // Ensure both players are synchronized if video is loaded
+        if (this.currentMediaType === 'video') {
+            this.synchronizeVideoAudio();
+        }
+    }
+    
+    onTimeUpdate() {
+        // Throttle updates to prevent excessive animation/processing
+        const now = Date.now();
+        if (!this.lastTimeUpdate || now - this.lastTimeUpdate > 100) { // Update max every 100ms
+            this.lastTimeUpdate = now;
+            
+            if (!this.isDraggingProgress) {
+                // Update all progress indicators in a single batch to ensure perfect sync
+                this.updateAllProgressIndicators();
+                this.updateTimeDisplay();
+            }
+        }
+    }
+    
+    updateAllProgressIndicators() {
+        const currentTime = this.getCurrentTime();
+        const duration = this.getMediaDuration();
+        
+        if (duration > 0 && !isNaN(currentTime) && !isNaN(duration)) {
+            const progress = Math.min(100, Math.max(0, (currentTime / duration) * 100));
+            const progressValue = `${progress}%`;
+            
+            // Update only the blue dot (progress handle) and waveform playhead
+            // Removed green line (progressFill) as requested
+            const progressHandle = document.getElementById('progressHandle');
+            const playheadLine = document.getElementById('playheadLine');
+            
+            // Batch DOM updates for better performance and perfect sync
+            if (progressHandle) {
+                progressHandle.style.left = progressValue;
+                progressHandle.style.transition = 'none';
+            }
+            if (playheadLine) {
+                playheadLine.style.left = progressValue;
+                playheadLine.style.transition = 'none';
+            }
+        }
+    }
+    
+    onMediaPlay() {
+        this.isPlaying = true;
+        const playPauseBtn = document.getElementById('playPause');
+        playPauseBtn?.classList.add('playing');
+    }
+    
+    onMediaPause() {
+        this.isPlaying = false;
+        const playPauseBtn = document.getElementById('playPause');
+        playPauseBtn?.classList.remove('playing');
+    }
+    
+    onMediaEnded() {
+        this.isPlaying = false;
+        const playPauseBtn = document.getElementById('playPause');
+        const icon = playPauseBtn?.querySelector('i');
+        if (icon) icon.className = 'fas fa-play';
+        playPauseBtn?.classList.remove('playing');
+        
+        this.log('🏁 Media playback completed', 'info');
+    }
+    
+    onMediaError(event, mediaType) {
+        this.log(`❌ ${mediaType} player error: ${event.message || 'Unknown error'}`, 'error');
+        this.showUIMessage(`❌ ${mediaType} playback error`, 'error');
+    }
+    
+    // ========================================
+    // UNIFIED MEDIA PLAYER UTILITIES
+    // ========================================
+    
+    hasLoadedMedia() {
+        return this.currentMediaType !== 'none' && 
+               ((this.audioPlayer && this.audioPlayer.src) || 
+                (this.videoPlayer && this.videoPlayer.src));
+    }
+    
+    getCurrentTime() {
+        if (this.currentMediaType === 'video' && this.videoPlayer) {
+            return this.videoPlayer.currentTime || 0;
+        }
+        return this.audioPlayer?.currentTime || 0;
+    }
+    
+    getMediaDuration() {
+        if (this.currentMediaType === 'video' && this.videoPlayer) {
+            return this.videoPlayer.duration || 0;
+        }
+        return this.audioPlayer?.duration || 0;
+    }
+    
+    switchToVideoMode() {
+        this.currentMediaType = 'video';
+        
+        const videoArea = document.getElementById('videoDisplayArea');
+        const mediaBadge = document.getElementById('mediaBadge');
+        const videoInfoSection = document.getElementById('videoInfoSection');
+        
+        if (videoArea) videoArea.style.display = 'block';
+        if (mediaBadge) {
+            mediaBadge.textContent = 'Video + Audio';
+            mediaBadge.className = 'media-badge video';
+        }
+        if (videoInfoSection) videoInfoSection.style.display = 'block';
+        
+        this.log('🎥 Switched to video mode', 'info');
+    }
+    
+    switchToAudioMode() {
+        this.currentMediaType = 'audio';
+        
+        const videoArea = document.getElementById('videoDisplayArea');
+        const mediaBadge = document.getElementById('mediaBadge');
+        const videoInfoSection = document.getElementById('videoInfoSection');
+        
+        if (videoArea) videoArea.style.display = 'none';
+        if (mediaBadge) {
+            mediaBadge.textContent = 'Audio Only';
+            mediaBadge.className = 'media-badge audio';
+        }
+        if (videoInfoSection) videoInfoSection.style.display = 'none';
+        
+        this.log('🎵 Switched to audio mode', 'info');
+    }
+    
+    synchronizeVideoAudio() {
+        if (this.currentMediaType === 'video' && this.videoPlayer && this.audioPlayer) {
+            // Ensure audio player is muted to prevent double audio
+            this.audioPlayer.muted = true;
+            this.audioPlayer.volume = 0;
+            
+            // Sync audio player time with video for waveform visualization
+            const syncTime = () => {
+                if (!this.isDraggingProgress && Math.abs(this.videoPlayer.currentTime - this.audioPlayer.currentTime) > 0.2) {
+                    this.audioPlayer.currentTime = this.videoPlayer.currentTime;
+                }
+            };
+            
+            // Remove existing listeners to prevent duplicates
+            this.videoPlayer.removeEventListener('timeupdate', this.syncTimeHandler);
+            this.videoPlayer.removeEventListener('seeked', this.syncTimeHandler);
+            
+            // Store handler reference for cleanup
+            this.syncTimeHandler = syncTime;
+            
+            // Add event listeners for synchronization
+            this.videoPlayer.addEventListener('timeupdate', this.syncTimeHandler);
+            this.videoPlayer.addEventListener('seeked', this.syncTimeHandler);
+            
+            this.log('🔄 Video/Audio synchronization enabled (audio muted)', 'info');
+        }
+    }
+    
+    showUnifiedPlayer() {
+        const playerSection = document.getElementById('unifiedMediaPlayerSection');
+        if (playerSection) {
+            playerSection.style.display = 'block';
+            // Smooth animation
+            setTimeout(() => {
+                playerSection.style.opacity = '1';
+                playerSection.style.transform = 'translateY(0)';
+            }, 100);
+        }
+        
+        // Hide old players
+        const oldAudioSection = document.getElementById('audioPlayerSection');
+        const oldVideoSection = document.getElementById('videoPlayerSection');
+        if (oldAudioSection) oldAudioSection.style.display = 'none';
+        if (oldVideoSection) oldVideoSection.style.display = 'none';
+    }
+    
+    updateProgressUI() {
+        const currentTime = this.getCurrentTime();
+        const duration = this.getMediaDuration();
+        
+        if (duration > 0 && !isNaN(currentTime) && !isNaN(duration)) {
+            const progress = Math.min(100, Math.max(0, (currentTime / duration) * 100));
+            
+            // Debug logging to check values
+            // console.log(`Progress Update: ${currentTime.toFixed(2)}s / ${duration.toFixed(2)}s = ${progress.toFixed(2)}%`);
+            
+            const progressFill = document.getElementById('progressFill');
+            const progressHandle = document.getElementById('progressHandle');
+            
+            // Update both elements with the SAME value and SAME timing
+            if (progressFill && progressHandle) {
+                // Force both elements to update simultaneously
+                const progressValue = `${progress}%`;
+                
+                progressFill.style.width = progressValue;
+                progressHandle.style.left = progressValue;
+                
+                // Ensure no transitions for smooth performance
+                progressFill.style.transition = 'none';
+                progressHandle.style.transition = 'none';
+            }
+        }
+    }
+    
+    updateTimeDisplay() {
+        const currentTime = this.getCurrentTime();
+        const duration = this.getMediaDuration();
+        
+        const currentTimeEl = document.getElementById('currentTime');
+        const totalTimeEl = document.getElementById('totalTime');
+        
+        if (currentTimeEl) currentTimeEl.textContent = this.formatTime(currentTime);
+        if (totalTimeEl) totalTimeEl.textContent = this.formatTime(duration);
+    }
+    
+    updatePlayheadPosition() {
+        const currentTime = this.getCurrentTime();
+        const duration = this.getMediaDuration();
+        
+        if (duration > 0 && !isNaN(currentTime) && !isNaN(duration)) {
+            const progress = Math.min(100, Math.max(0, (currentTime / duration) * 100));
+            const playheadLine = document.getElementById('playheadLine');
+            if (playheadLine) {
+                playheadLine.style.left = `${progress}%`;
+                playheadLine.style.transition = 'none'; // Ensure no animation delays
+            }
+        }
+    }
+    
+    updateVolumeUI(volume) {
+        const volumeFill = document.getElementById('volumeFill');
+        const volumeBtn = document.getElementById('volumeBtn');
+        const icon = volumeBtn?.querySelector('i');
+        
+        if (volumeFill) volumeFill.style.width = `${volume * 100}%`;
+        
+        if (icon) {
+            if (volume === 0) {
+                icon.className = 'fas fa-volume-mute';
+            } else if (volume < 0.3) {
+                icon.className = 'fas fa-volume-off';
+            } else if (volume < 0.7) {
+                icon.className = 'fas fa-volume-down';
+            } else {
+                icon.className = 'fas fa-volume-up';
+            }
+        }
+    }
+    
+    updateMediaInfo() {
+        const duration = this.getMediaDuration();
+        const formatInfo = this.currentMediaType === 'video' ? 'Video + Audio' : 'Audio';
+        const sizeInfo = this.currentAudioBlob ? this.formatFileSize(this.currentAudioBlob.size) : 'Unknown';
+        
+        const durationInfo = document.getElementById('durationInfo');
+        const formatInfoEl = document.getElementById('formatInfo');
+        const sizeInfoEl = document.getElementById('sizeInfo');
+        
+        if (durationInfo) durationInfo.textContent = this.formatTime(duration);
+        if (formatInfoEl) formatInfoEl.textContent = formatInfo;
+        if (sizeInfoEl) sizeInfoEl.textContent = sizeInfo;
+        
+        // Update video-specific info
+        if (this.currentMediaType === 'video' && this.videoPlayer) {
+            const resolutionInfo = document.getElementById('resolutionInfo');
+            if (resolutionInfo) {
+                const width = this.videoPlayer.videoWidth || 0;
+                const height = this.videoPlayer.videoHeight || 0;
+                resolutionInfo.textContent = width && height ? `${width}x${height}` : 'Unknown';
+            }
+        }
+    }
+    
+    // ========================================
+    // PROGRESS BAR INTERACTION HANDLERS
+    // ========================================
+    
+    seekFromProgressClick(event) {
+        if (!this.hasLoadedMedia()) return;
+        
+        const progressContainer = event.currentTarget;
+        const rect = progressContainer.getBoundingClientRect();
+        const clickX = event.clientX - rect.left;
+        const progress = clickX / rect.width;
+        const duration = this.getMediaDuration();
+        const seekTime = progress * duration;
+        
+        this.seekToTime(seekTime);
+        this.log(`🎯 Seeked to ${this.formatTime(seekTime)} via progress click`, 'info');
+    }
+    
+    startProgressDrag(event) {
+        this.isDraggingProgress = true;
+        event.preventDefault();
+    }
+    
+    onProgressDrag(event) {
+        if (!this.isDraggingProgress || !this.hasLoadedMedia()) return;
+        
+        const progressContainer = document.getElementById('progressContainer');
+        if (!progressContainer) return;
+        
+        const rect = progressContainer.getBoundingClientRect();
+        const dragX = Math.max(0, Math.min(rect.width, event.clientX - rect.left));
+        const progress = dragX / rect.width;
+        const duration = this.getMediaDuration();
+        const seekTime = progress * duration;
+        
+        this.seekToTime(seekTime);
+    }
+    
+    endProgressDrag() {
+        this.isDraggingProgress = false;
     }
     
     toggleLoop() {
@@ -2432,37 +3076,83 @@ class AudioToolsPro {
     renderWaveform(audioBuffer) {
         const canvas = document.getElementById('waveformCanvas');
         if (!canvas) return;
+        
         const ctx = canvas.getContext('2d');
         const width = canvas.clientWidth;
         const height = canvas.height;
         canvas.width = width;
-        ctx.clearRect(0, 0, width, height);
-
+        
+        // Clear canvas with gradient background
+        const gradient = ctx.createLinearGradient(0, 0, 0, height);
+        gradient.addColorStop(0, '#1a1a1a');
+        gradient.addColorStop(0.5, '#222222');
+        gradient.addColorStop(1, '#1a1a1a');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, width, height);
+        
         const channelData = audioBuffer.getChannelData(0);
         const samplesPerPixel = Math.max(1, Math.floor(channelData.length / width));
-        ctx.fillStyle = 'rgba(255,255,255,0.08)';
-        ctx.fillRect(0, 0, width, height);
-        ctx.strokeStyle = '#66ccff';
-        ctx.lineWidth = 1;
+        
+        // Create waveform gradient
+        const waveGradient = ctx.createLinearGradient(0, 0, 0, height);
+        waveGradient.addColorStop(0, 'rgba(0, 212, 255, 0.8)');
+        waveGradient.addColorStop(0.5, 'rgba(0, 255, 136, 0.6)');
+        waveGradient.addColorStop(1, 'rgba(0, 212, 255, 0.8)');
+        
+        ctx.strokeStyle = waveGradient;
+        ctx.lineWidth = 1.5;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        
+        // Draw waveform with enhanced quality
         ctx.beginPath();
+        let lastY = height / 2;
+        
         for (let x = 0; x < width; x++) {
             const start = x * samplesPerPixel;
             let min = 1.0;
             let max = -1.0;
+            
             for (let i = 0; i < samplesPerPixel; i++) {
                 const v = channelData[start + i] || 0;
                 if (v < min) min = v;
                 if (v > max) max = v;
             }
+            
             const y1 = Math.round((1 - (max + 1) / 2) * height);
             const y2 = Math.round((1 - (min + 1) / 2) * height);
-            ctx.moveTo(x, y1);
+            
+            if (x === 0) {
+                ctx.moveTo(x, y1);
+                lastY = y1;
+            } else {
+                // Smooth curve interpolation
+                const midY = (lastY + y1) / 2;
+                ctx.quadraticCurveTo(x - 0.5, lastY, x, midY);
+                lastY = y1;
+            }
+            
             ctx.lineTo(x, y2);
         }
+        
         ctx.stroke();
-
-        // playhead overlay
-        this.paintWaveformPlayhead();
+        
+        // Add subtle glow effect
+        ctx.shadowColor = 'rgba(0, 212, 255, 0.3)';
+        ctx.shadowBlur = 4;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        
+        // Draw center reference line
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, height / 2);
+        ctx.lineTo(width, height / 2);
+        ctx.stroke();
+        
+        // Update playhead position if playing
+        this.updatePlayheadPosition();
     }
 
     paintWaveformPlayhead() {
@@ -2556,12 +3246,17 @@ class AudioToolsPro {
     }
 
     seekFromWaveformClick(e) {
-        if (!this.audioPlayer || isNaN(this.audioPlayer.duration)) return;
+        if (!this.hasLoadedMedia()) return;
+        
         const canvas = e.currentTarget;
         const rect = canvas.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const ratio = x / rect.width;
-        this.audioPlayer.currentTime = ratio * this.audioPlayer.duration;
+        const duration = this.getMediaDuration();
+        const seekTime = ratio * duration;
+        
+        this.seekToTime(seekTime);
+        this.log(`🎯 Seeked to ${this.formatTime(seekTime)} via waveform click`, 'info');
     }
     
     onAudioEnded() {
@@ -2907,9 +3602,11 @@ class AudioToolsPro {
             confidenceThreshold: 0.7,
             enableAI: true,
             enablePreprocessing: true,
-            // Additional parameters for enhanced detection
             pauseThreshold: pauseThreshold,
-            pauseMinDuration: pauseMinDuration
+            pauseMinDuration: pauseMinDuration,
+            // Include OpenAI API key for backend AI processing
+            openaiApiKey: this.openAIKey || this.settings?.openaiApiKey || null,
+            language: this.settings?.preferredLanguage || null
         };
     }
     
@@ -6243,9 +6940,7 @@ Format your response as JSON with this structure:
         
         return results;
     }
-    
-    // ... (rest of existing methods remain the same but updated for new UI)
-    
+        
     // Settings management
     getDefaultSettings() {
         return {
@@ -6353,10 +7048,19 @@ Format your response as JSON with this structure:
     
     // Utility methods
     formatTime(seconds) {
-        if (isNaN(seconds)) return '0:00';
-        const mins = Math.floor(seconds / 60);
-        const secs = Math.floor(seconds % 60);
-        return `${mins}:${secs.toString().padStart(2, '0')}`;
+        if (isNaN(seconds) || seconds < 0) return '0:00.0';
+        
+        const hours = Math.floor(seconds / 3600);
+        const mins = Math.floor((seconds % 3600) / 60);
+        const secs = seconds % 60;
+        const wholeSecs = Math.floor(secs);
+        const decimals = Math.floor((secs - wholeSecs) * 10);
+        
+        if (hours > 0) {
+            return `${hours}:${mins.toString().padStart(2, '0')}:${wholeSecs.toString().padStart(2, '0')}.${decimals}`;
+        } else {
+            return `${mins}:${wholeSecs.toString().padStart(2, '0')}.${decimals}`;
+        }
     }
     
     updateProgress(text, percentage) {
@@ -6367,7 +7071,6 @@ Format your response as JSON with this structure:
         if (progressBar) progressBar.style.width = `${percentage}%`;
     }
     
-    // ... (rest of existing methods)
     
     setupUI() {
         this.updateProjectInfo();
@@ -12247,227 +12950,12 @@ Format your response as JSON with this structure:
         return silenceResults;
     }
 
-    // AI-powered silence detection using Whisper transcription
-    async detectSilenceWithAI(mediaPath, threshold, minSilence) {
-        try {
-            this.log('🧠 Starting AI-powered silence detection...', 'info');
-            
-            // Get audio blob for transcription - Enhanced blob loading
-            let audioBlob = this.currentAudioBlob;
-            
-            if (!audioBlob) {
-                this.log('📂 No cached audio blob, loading from media path...', 'info');
-                
-                // Try multiple methods to get audio blob
-                if (mediaPath.startsWith('file://')) {
-                    try {
-                        const response = await fetch(mediaPath);
-                        audioBlob = await response.blob();
-                        this.log('✅ Audio blob loaded from file:// URL', 'success');
-                    } catch (fetchError) {
-                        this.log(`⚠️ Fetch failed: ${fetchError.message}`, 'warning');
-                    }
-                }
-                
-                // If still no blob, try to get from audio player
-                if (!audioBlob && this.audioPlayer && this.audioPlayer.src) {
-                    try {
-                        this.log('🎵 Trying to get blob from audio player...', 'info');
-                        const response = await fetch(this.audioPlayer.src);
-                        audioBlob = await response.blob();
-                        this.log('✅ Audio blob loaded from audio player', 'success');
-                    } catch (playerError) {
-                        this.log(`⚠️ Audio player fetch failed: ${playerError.message}`, 'warning');
-                    }
-                }
-                
-                // If still no blob, try to load from file path directly
-                if (!audioBlob && this.currentAudioPath) {
-                    try {
-                        this.log('📁 Trying to load from current audio path...', 'info');
-                        audioBlob = await this.openaiIntegration.fileToBlob(this.currentAudioPath);
-                        this.log('✅ Audio blob loaded from file path', 'success');
-                    } catch (fileError) {
-                        this.log(`⚠️ File path loading failed: ${fileError.message}`, 'warning');
-                    }
-                }
-                
-                // If still no blob, try to create from the file path
-                if (!audioBlob && mediaPath && !mediaPath.startsWith('file://')) {
-                    try {
-                        this.log('📁 Converting file path to blob...', 'info');
-                        const filePath = `file://${mediaPath}`;
-                        const response = await fetch(filePath);
-                        audioBlob = await response.blob();
-                        this.log('✅ Audio blob created from file path', 'success');
-                    } catch (pathError) {
-                        this.log(`⚠️ Path conversion failed: ${pathError.message}`, 'warning');
-                    }
-                }
-                
-                if (!audioBlob) {
-                    throw new Error('Could not load audio blob from any source');
-                }
-            }
-            
-            // Store the blob for future use
-            this.currentAudioBlob = audioBlob;
-            this.log(`📊 Audio blob ready: ${(audioBlob.size / 1024).toFixed(1)}KB`, 'info');
-            
-            // Transcribe audio using OpenAI Whisper (with large file handling)
-            this.log('🎤 Transcribing audio with OpenAI Whisper...', 'info');
-            
-            let transcript;
-            try {
-                // Use the main transcribeAudio method which handles large files automatically
-                transcript = await this.openaiIntegration.transcribeAudio(audioBlob, {
-                    response_format: 'verbose_json',
-                    timestamp_granularities: ['word']
-                });
-                this.log('✅ Transcription completed successfully', 'success');
-            } catch (transcriptionError) {
-                this.log(`❌ AI transcription failed: ${transcriptionError.message}`, 'error');
-                throw new Error(`All transcription formats failed: ${transcriptionError.message}`);
-            }
-            
-            if (!transcript) {
-                throw new Error('No transcript received from OpenAI');
-            }
-            
-            this.log(`📝 Transcript received, processing...`, 'info');
-            
-            // Store transcript for display
-            if (transcript.text) {
-                this.lastTranscript = transcript.text;
-                this.log(`📝 Full transcript stored: ${transcript.text.length} characters`, 'success');
-            }
-            
-            // Analyze gaps between words for silence detection
-            let words = transcript.words;
-            
-            // Handle different response formats
-            if (!words && transcript.segments) {
-                this.log('📝 Using segments instead of words for analysis', 'info');
-                words = transcript.segments;
-            } else if (!words && transcript.text) {
-                this.log('📝 Using text-only response, creating basic timing', 'info');
-                // Create basic word-level timing from text
-                words = this.createBasicWordTiming(transcript.text, transcript.duration || 10);
-            }
-            
-            if (!words || words.length === 0) {
-                throw new Error('No usable timing information in transcript');
-            }
-            
-            const silenceResults = this.analyzeSilenceFromTranscript(words, threshold, minSilence);
-            
-            this.log(`🤖 AI analysis completed: ${silenceResults.length} silence segments found`, 'success');
-            return silenceResults;
-            
-        } catch (error) {
-            this.log(`❌ AI silence detection failed: ${error.message}`, 'error');
-            throw error;
-        }
-    }
+    // Note: AI-powered silence detection has been moved to backend service
+    // The detectSilenceWithAI function is no longer needed on frontend
 
-    // Create basic word timing from text-only response
-    createBasicWordTiming(text, duration) {
-        const words = text.split(/\s+/).filter(word => word.length > 0);
-        const wordDuration = duration / words.length;
-        
-        return words.map((word, index) => ({
-            text: word,
-            start: index * wordDuration,
-            end: (index + 1) * wordDuration,
-            start_time: index * wordDuration,
-            end_time: (index + 1) * wordDuration
-        }));
-    }
+    // Note: AI helper functions have been moved to backend service
 
-    // Analyze transcript words to detect silence gaps
-    analyzeSilenceFromTranscript(words, threshold, minSilence) {
-        const silenceResults = [];
-        const minSilenceMs = minSilence * 1000;
-        
-        // Sort words by start time
-        const sortedWords = words.sort((a, b) => a.start - b.start);
-        
-        for (let i = 0; i < sortedWords.length - 1; i++) {
-            const currentWord = sortedWords[i];
-            const nextWord = sortedWords[i + 1];
-            
-            // Calculate gap between words
-            const gapStart = currentWord.end || currentWord.end_time || 0;
-            const gapEnd = nextWord.start || nextWord.start_time || 0;
-            const gapDuration = (gapEnd - gapStart) * 1000; // Convert to milliseconds
-            
-            // Check if gap is long enough to be considered silence
-            if (gapDuration >= minSilenceMs) {
-                const silenceSegment = {
-                    start: gapStart * 1000, // Convert to milliseconds
-                    end: gapEnd * 1000,
-                    duration: gapDuration,
-                    type: 'ai_silence',
-                    description: 'AI-detected speech gap',
-                    threshold: threshold,
-                    minDuration: minSilence,
-                    confidence: 0.9, // High confidence for AI detection
-                    method: 'whisper',
-                    wordBefore: currentWord.text,
-                    wordAfter: nextWord.text
-                };
-                
-                silenceResults.push(silenceSegment);
-            }
-        }
-        
-        // Also check for silence at the beginning and end
-        if (sortedWords.length > 0) {
-            const firstWord = sortedWords[0];
-            const lastWord = sortedWords[sortedWords.length - 1];
-            
-            // Beginning silence
-            if (firstWord.start > minSilence) {
-                silenceResults.push({
-                    start: 0,
-                    end: firstWord.start * 1000,
-                    duration: firstWord.start * 1000,
-                    type: 'ai_silence',
-                    description: 'AI-detected beginning silence',
-                    threshold: threshold,
-                    minDuration: minSilence,
-                    confidence: 0.9,
-                    method: 'whisper',
-                    wordBefore: null,
-                    wordAfter: firstWord.text
-                });
-            }
-            
-            // End silence (estimate total duration)
-            const estimatedTotalDuration = Math.max(lastWord.end || lastWord.end_time || 0, 30); // At least 30 seconds
-            if (estimatedTotalDuration - lastWord.end > minSilence) {
-                silenceResults.push({
-                    start: lastWord.end * 1000,
-                    end: estimatedTotalDuration * 1000,
-                    duration: (estimatedTotalDuration - lastWord.end) * 1000,
-                    type: 'ai_silence',
-                    description: 'AI-detected ending silence',
-                    threshold: threshold,
-                    minDuration: minSilence,
-                    confidence: 0.8,
-                    method: 'whisper',
-                    wordBefore: lastWord.text,
-                    wordAfter: null
-                });
-            }
-        }
-        
-        // Sort by start time
-        silenceResults.sort((a, b) => a.start - b.start);
-        
-        this.log(`📊 AI analysis: Found ${silenceResults.length} silence segments from transcript`, 'info');
-        return silenceResults;
-    }
+    // Note: Transcript analysis has been moved to backend service
 
     // Estimate audio duration from file path
     estimateAudioDuration(mediaPath) {

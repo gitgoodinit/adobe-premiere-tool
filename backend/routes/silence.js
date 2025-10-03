@@ -104,8 +104,15 @@ router.post('/detect', upload.single('audio'), async (req, res) => {
             minDuration: parseFloat(req.body.minDuration) || 0.5,
             confidenceThreshold: parseFloat(req.body.confidenceThreshold) || 0.7,
             enableAI: req.body.enableAI !== false,
-            enablePreprocessing: req.body.enablePreprocessing !== false
+            enablePreprocessing: req.body.enablePreprocessing !== false,
+            language: req.body.language // Optional language for OpenAI
         };
+
+        // Configure OpenAI API key if provided
+        if (req.body.openaiApiKey) {
+            silenceDetector.setOpenAIApiKey(req.body.openaiApiKey);
+            logger.info(`[${requestId}] OpenAI API key configured for request`);
+        }
 
         // Perform silence detection
         const results = await silenceDetector.detectSilence(req.file.path, options);
