@@ -1,5 +1,5 @@
 /**
- * Logger Service
+ * Logger Utility
  * Centralized logging with Winston
  */
 
@@ -14,7 +14,7 @@ class Logger {
 
     createLogger() {
         // Create logs directory if it doesn't exist
-        const logsDir = path.join(__dirname, '../logs');
+        const logsDir = path.join(__dirname, '../../logs');
         if (!fs.existsSync(logsDir)) {
             fs.mkdirSync(logsDir, { recursive: true });
         }

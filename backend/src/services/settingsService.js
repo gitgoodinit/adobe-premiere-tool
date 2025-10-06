@@ -1,5 +1,5 @@
 /**
- * Settings Manager Service
+ * Settings Service
  * Handles application settings and configuration management
  */
 
@@ -7,21 +7,16 @@ const fs = require('fs');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 
-const Logger = require('./Logger');
-
-class SettingsManager {
+class SettingsService {
     constructor() {
-        this.logger = new Logger();
-        this.settingsPath = path.join(__dirname, '../config/settings.json');
-        this.backupsPath = path.join(__dirname, '../config/backups');
+        this.settingsPath = path.join(__dirname, '../../config/settings.json');
+        this.backupsPath = path.join(__dirname, '../../config/backups');
         this.settings = null;
         this.isInitialized = false;
     }
 
     async initialize() {
         try {
-            this.logger.info('Initializing Settings Manager...');
-            
             // Create config directory if it doesn't exist
             const configDir = path.dirname(this.settingsPath);
             if (!fs.existsSync(configDir)) {
@@ -37,10 +32,8 @@ class SettingsManager {
             await this.loadSettings();
             
             this.isInitialized = true;
-            this.logger.info('Settings Manager initialized successfully');
             
         } catch (error) {
-            this.logger.error('Failed to initialize Settings Manager:', error);
             throw error;
         }
     }
@@ -50,14 +43,11 @@ class SettingsManager {
             if (fs.existsSync(this.settingsPath)) {
                 const data = fs.readFileSync(this.settingsPath, 'utf8');
                 this.settings = JSON.parse(data);
-                this.logger.info('Settings loaded from file');
             } else {
                 this.settings = this.getDefaultSettings();
                 await this.saveSettings();
-                this.logger.info('Default settings created');
             }
         } catch (error) {
-            this.logger.error('Failed to load settings:', error);
             this.settings = this.getDefaultSettings();
         }
     }
@@ -68,9 +58,7 @@ class SettingsManager {
             this.settings.version = '1.0.0';
             
             fs.writeFileSync(this.settingsPath, JSON.stringify(this.settings, null, 2));
-            this.logger.debug('Settings saved to file');
         } catch (error) {
-            this.logger.error('Failed to save settings:', error);
             throw error;
         }
     }
@@ -166,11 +154,9 @@ class SettingsManager {
             // Save settings
             await this.saveSettings();
             
-            this.logger.info('Settings updated successfully');
             return { ...this.settings };
             
         } catch (error) {
-            this.logger.error('Failed to update settings:', error);
             throw error;
         }
     }
@@ -269,7 +255,6 @@ class SettingsManager {
                     mimeType = 'application/json';
                     break;
                 case 'yaml':
-                    // In a real implementation, you'd use a YAML library
                     data = JSON.stringify(settings, null, 2);
                     mimeType = 'text/yaml';
                     break;
@@ -291,7 +276,6 @@ class SettingsManager {
             };
             
         } catch (error) {
-            this.logger.error('Failed to export settings:', error);
             throw error;
         }
     }
@@ -313,7 +297,6 @@ class SettingsManager {
                     importedSettings = typeof data === 'string' ? JSON.parse(data) : data;
                     break;
                 case 'yaml':
-                    // In a real implementation, you'd use a YAML library
                     importedSettings = typeof data === 'string' ? JSON.parse(data) : data;
                     break;
                 case 'env':
@@ -347,8 +330,6 @@ class SettingsManager {
             
             await this.saveSettings();
             
-            this.logger.info('Settings imported successfully');
-            
             return {
                 imported: true,
                 skipped: false,
@@ -358,50 +339,6 @@ class SettingsManager {
             };
             
         } catch (error) {
-            this.logger.error('Failed to import settings:', error);
-            throw error;
-        }
-    }
-
-    async resetSettings(options = {}) {
-        const {
-            sections = ['all'],
-            backup = true
-        } = options;
-
-        try {
-            // Create backup if requested
-            let backupCreated = false;
-            if (backup) {
-                await this.createBackup();
-                backupCreated = true;
-            }
-            
-            const defaultSettings = this.getDefaultSettings();
-            
-            if (sections.includes('all')) {
-                this.settings = defaultSettings;
-            } else {
-                sections.forEach(section => {
-                    if (defaultSettings[section]) {
-                        this.settings[section] = { ...defaultSettings[section] };
-                    }
-                });
-            }
-            
-            await this.saveSettings();
-            
-            this.logger.info(`Settings reset for sections: ${sections.join(', ')}`);
-            
-            return {
-                sectionsReset: sections,
-                backupCreated,
-                defaultSettings: { ...defaultSettings },
-                settings: { ...this.settings }
-            };
-            
-        } catch (error) {
-            this.logger.error('Failed to reset settings:', error);
             throw error;
         }
     }
@@ -421,189 +358,11 @@ class SettingsManager {
             
             fs.writeFileSync(backupPath, JSON.stringify(backup, null, 2));
             
-            this.logger.info(`Settings backup created: ${backupId}`);
             return backupId;
             
         } catch (error) {
-            this.logger.error('Failed to create settings backup:', error);
             throw error;
         }
-    }
-
-    async getBackups() {
-        try {
-            const files = fs.readdirSync(this.backupsPath);
-            const backups = [];
-            
-            files.forEach(file => {
-                if (file.endsWith('.json')) {
-                    try {
-                        const data = fs.readFileSync(path.join(this.backupsPath, file), 'utf8');
-                        const backup = JSON.parse(data);
-                        const stats = fs.statSync(path.join(this.backupsPath, file));
-                        
-                        backups.push({
-                            id: backup.id,
-                            name: backup.name,
-                            createdAt: backup.createdAt,
-                            size: stats.size,
-                            description: `Backup from ${backup.createdAt}`,
-                            version: backup.version
-                        });
-                    } catch (error) {
-                        this.logger.warn(`Failed to read backup file ${file}:`, error);
-                    }
-                }
-            });
-            
-            return backups.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-            
-        } catch (error) {
-            this.logger.error('Failed to get backups:', error);
-            return [];
-        }
-    }
-
-    async restoreBackup(backupId) {
-        try {
-            const backupPath = path.join(this.backupsPath, `settings_${backupId}.json`);
-            
-            if (!fs.existsSync(backupPath)) {
-                throw new Error(`Backup not found: ${backupId}`);
-            }
-            
-            const data = fs.readFileSync(backupPath, 'utf8');
-            const backup = JSON.parse(data);
-            
-            // Create current backup before restoring
-            await this.createBackup();
-            
-            // Restore settings
-            this.settings = { ...backup.settings };
-            await this.saveSettings();
-            
-            this.logger.info(`Settings restored from backup: ${backupId}`);
-            
-            return {
-                restored: true,
-                backupInfo: {
-                    id: backup.id,
-                    name: backup.name,
-                    createdAt: backup.createdAt,
-                    version: backup.version
-                },
-                settings: { ...this.settings }
-            };
-            
-        } catch (error) {
-            this.logger.error('Failed to restore backup:', error);
-            throw error;
-        }
-    }
-
-    getSettingsSchema() {
-        return {
-            version: '1.0.0',
-            lastUpdated: new Date().toISOString(),
-            
-            api: {
-                openai: {
-                    apiKey: { type: 'string', required: false, format: 'api_key' },
-                    model: { type: 'string', required: false, default: 'gpt-4o-mini' },
-                    enabled: { type: 'boolean', required: false, default: false }
-                },
-                google: {
-                    apiKey: { type: 'string', required: false, format: 'api_key' },
-                    enabled: { type: 'boolean', required: false, default: false }
-                }
-            },
-            
-            processing: {
-                audioBufferSize: { type: 'number', required: false, min: 512, max: 16384, default: 4096 },
-                processingQuality: { type: 'string', required: false, enum: ['low', 'medium', 'high'], default: 'high' },
-                maxFileSize: { type: 'number', required: false, min: 1048576, max: 524288000, default: 104857600 }
-            },
-            
-            audio: {
-                defaultFormat: { type: 'string', required: false, enum: ['mp3', 'wav', 'm4a', 'ogg'], default: 'mp3' },
-                sampleRate: { type: 'number', required: false, enum: [22050, 44100, 48000, 96000], default: 44100 },
-                channels: { type: 'number', required: false, min: 1, max: 8, default: 2 }
-            },
-            
-            ui: {
-                theme: { type: 'string', required: false, enum: ['light', 'dark'], default: 'dark' },
-                language: { type: 'string', required: false, default: 'en' },
-                logLevel: { type: 'string', required: false, enum: ['error', 'warn', 'info', 'debug', 'verbose'], default: 'info' }
-            },
-            
-            advanced: {
-                enableDebugMode: { type: 'boolean', required: false, default: false },
-                cacheTTL: { type: 'number', required: false, min: 60, max: 86400, default: 3600 },
-                rateLimitMax: { type: 'number', required: false, min: 10, max: 1000, default: 100 }
-            }
-        };
-    }
-
-    async testAPIConfiguration(options = {}) {
-        const {
-            apiType = 'all',
-            timeout = 10000
-        } = options;
-
-        const results = {
-            openai: { available: false, error: null },
-            google: { available: false, error: null },
-            overall: { available: false, error: null }
-        };
-
-        let totalTests = 0;
-        let passed = 0;
-
-        // Test OpenAI API
-        if (apiType === 'all' || apiType === 'openai') {
-            totalTests++;
-            try {
-                if (this.settings.api?.openai?.apiKey && this.settings.api.openai.enabled) {
-                    // In a real implementation, you'd make an actual API call
-                    results.openai = { available: true, error: null };
-                    passed++;
-                } else {
-                    results.openai = { available: false, error: 'API key not configured or disabled' };
-                }
-            } catch (error) {
-                results.openai = { available: false, error: error.message };
-            }
-        }
-
-        // Test Google Cloud API
-        if (apiType === 'all' || apiType === 'google') {
-            totalTests++;
-            try {
-                if (this.settings.api?.google?.apiKey && this.settings.api.google.enabled) {
-                    // In a real implementation, you'd make an actual API call
-                    results.google = { available: true, error: null };
-                    passed++;
-                } else {
-                    results.google = { available: false, error: 'API key not configured or disabled' };
-                }
-            } catch (error) {
-                results.google = { available: false, error: error.message };
-            }
-        }
-
-        // Calculate overall results
-        results.overall = {
-            available: passed === totalTests,
-            error: passed === totalTests ? null : `${totalTests - passed} API(s) failed`
-        };
-
-        return {
-            ...results,
-            totalTests,
-            passed,
-            failed: totalTests - passed,
-            successRate: totalTests > 0 ? (passed / totalTests) * 100 : 0
-        };
     }
 
     // Helper methods
@@ -665,29 +424,26 @@ class SettingsManager {
 
     async cleanup() {
         try {
-            this.logger.info('Cleaning up Settings Manager...');
-            
             // Clean up old backups (older than 30 days)
             const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-            const backups = await this.getBackups();
+            const files = fs.readdirSync(this.backupsPath);
             
-            backups.forEach(backup => {
-                if (new Date(backup.createdAt) < thirtyDaysAgo) {
-                    const backupPath = path.join(this.backupsPath, `settings_${backup.id}.json`);
-                    if (fs.existsSync(backupPath)) {
-                        fs.unlinkSync(backupPath);
-                        this.logger.debug(`Deleted old backup: ${backup.id}`);
+            files.forEach(file => {
+                if (file.endsWith('.json')) {
+                    const filePath = path.join(this.backupsPath, file);
+                    const stats = fs.statSync(filePath);
+                    if (stats.mtime < thirtyDaysAgo) {
+                        fs.unlinkSync(filePath);
                     }
                 }
             });
             
             this.isInitialized = false;
-            this.logger.info('Settings Manager cleanup completed');
             
         } catch (error) {
-            this.logger.error('Settings Manager cleanup failed:', error);
+            // Silent cleanup
         }
     }
 }
 
-module.exports = SettingsManager;
+module.exports = SettingsService;

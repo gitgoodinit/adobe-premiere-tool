@@ -3,10 +3,6 @@
  * Logs all incoming requests with timing and metadata
  */
 
-const Logger = require('../services/Logger');
-
-const logger = new Logger();
-
 function requestLogger(req, res, next) {
     const startTime = Date.now();
     const requestId = req.headers['x-request-id'] || `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -15,7 +11,7 @@ function requestLogger(req, res, next) {
     req.requestId = requestId;
     
     // Log request start
-    logger.info('Request started', {
+    console.log('Request started', {
         requestId,
         method: req.method,
         url: req.url,
@@ -31,7 +27,7 @@ function requestLogger(req, res, next) {
         const duration = Date.now() - startTime;
         
         // Log request completion
-        logger.info('Request completed', {
+        console.log('Request completed', {
             requestId,
             method: req.method,
             url: req.url,

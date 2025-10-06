@@ -15,28 +15,26 @@ const fs = require('fs');
 require('dotenv').config();
 
 // Import route modules
-const silenceRoutes = require('./routes/silence');
-const overlapRoutes = require('./routes/overlap');
-const multitrackRoutes = require('./routes/multitrack');
-const rhythmRoutes = require('./routes/rhythm');
-const settingsRoutes = require('./routes/settings');
-const healthRoutes = require('./routes/health');
+const silenceRoutes = require('./src/api/routes/silenceRoutes');
+const overlapRoutes = require('./src/api/routes/overlapRoutes');
+const multitrackRoutes = require('./src/api/routes/multitrackRoutes');
+const rhythmRoutes = require('./src/api/routes/rhythmRoutes');
+const settingsRoutes = require('./src/api/routes/settingsRoutes');
+const healthRoutes = require('./src/api/routes/healthRoutes');
 
 // Import middleware
-const errorHandler = require('./middleware/errorHandler');
-const requestLogger = require('./middleware/requestLogger');
-const validation = require('./middleware/validation');
+const errorHandler = require('./src/middleware/errorHandler');
+const requestLogger = require('./src/middleware/requestLogger');
+const validation = require('./src/middleware/validation');
 
-// Import services
-const AudioProcessor = require('./services/AudioProcessor');
-const CacheService = require('./services/CacheService');
-const Logger = require('./services/Logger');
+// Import services and utilities
+const CacheService = require('./src/services/cacheService');
+const Logger = require('./src/utils/logger');
 
 class AudioToolsBackend {
     constructor() {
         this.app = express();
         this.port = process.env.PORT || 3000;
-        this.audioProcessor = new AudioProcessor();
         this.cache = new CacheService();
         this.logger = new Logger();
         
@@ -192,7 +190,6 @@ class AudioToolsBackend {
     async start() {
         try {
             // Initialize services
-            await this.audioProcessor.initialize();
             await this.cache.initialize();
 
             // Start server
@@ -216,7 +213,6 @@ class AudioToolsBackend {
         this.logger.info('🛑 Shutting down server...');
         
         try {
-            await this.audioProcessor.cleanup();
             await this.cache.cleanup();
             this.logger.info('✅ Server shutdown complete');
             process.exit(0);

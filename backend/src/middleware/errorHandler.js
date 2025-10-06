@@ -3,13 +3,9 @@
  * Handles all unhandled errors and provides consistent error responses
  */
 
-const Logger = require('../services/Logger');
-
-const logger = new Logger();
-
 function errorHandler(err, req, res, next) {
     // Log the error
-    logger.error('Unhandled error:', {
+    console.error('Unhandled error:', {
         error: err.message,
         stack: err.stack,
         url: req.url,
