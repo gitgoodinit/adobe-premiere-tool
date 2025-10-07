@@ -15,6 +15,7 @@
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
   <!-- Enhanced UI Styles -->
   <link rel="stylesheet" href="./src/ui/enhanced-silence-results.css">
+  <link rel="stylesheet" href="./enhanced-rhythm-ui.css">
   <!-- CEP Library -->
   <script src="./CSInterface.js"></script>
 </head>
@@ -30,6 +31,8 @@
         <div class="wave wave-3"></div>
       </div>
       <div class="bg-particles">
+        <div class="particle"></div>
+        <div class="particle"></div>
         <div class="particle"></div>
         <div class="particle"></div>
         <div class="particle"></div>
@@ -248,59 +251,19 @@
     <!-- Main Content -->
     <main class="main-content">
 
-      <!-- Enhanced Project Information -->
-      <section class="project-info-panel">
-        <div class="panel-header">
-          <h2><i class="fas fa-film"></i> Current Project</h2>
+      <!-- Compact Project Status Bar -->
+      <div class="compact-project-status">
+        <div class="project-info">
+          <span class="project-name" id="projectName">Connected</span>
+          <span class="media-info">
+            <span id="videoFileName">No media</span>
+          </span>
         </div>
-
-        <div class="project-grid">
-          <div class="project-main-info">
-            <div class="project-title">
-              <h3 id="projectName">No Project Loaded</h3>
-              <span class="project-path" id="projectPath">/path/to/project.prproj</span>
-            </div>
-            <div class="project-stats">
-              <div class="stat-item">
-                <span class="stat-label">Sequence:</span>
-                <span class="stat-value" id="sequenceName">None</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Duration:</span>
-                <span class="stat-value" id="sequenceDuration">0:00</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Frame Rate:</span>
-                <span class="stat-value" id="frameRate">23.976 fps</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="project-media-info">
-            <div class="media-item">
-              <i class="fas fa-video"></i>
-              <div class="media-details">
-                <span class="media-name" id="videoFileName">shortez.mp4</span>
-                <span class="media-specs" id="videoSpecs">1920x1080, H.264</span>
-              </div>
-            </div>
-            <div class="track-summary">
-              <div class="track-count">
-                <i class="fas fa-volume-up"></i>
-                <span id="audioTrackCount">0</span> Audio Tracks
-              </div>
-              <div class="track-count">
-                <i class="fas fa-film"></i>
-                <span id="videoTrackCount">0</span> Video Tracks
-              </div>
-              <div class="selected-info">
-                <i class="fas fa-mouse-pointer"></i>
-                <span id="selectedClipsCount">0</span> Selected
-              </div>
-            </div>
-          </div>
+        <div class="connection-indicator">
+          <span class="status-dot" id="projectStatusDot"></span>
+          <span class="status-text" id="projectStatusText">Ready</span>
         </div>
-      </section>
+      </div>
 
       <!-- Unified Media Player Section -->
       <section class="unified-media-player-section" id="unifiedMediaPlayerSection" style="display: none;">
@@ -1048,151 +1011,280 @@
       <!-- Feature 3: Multi-Track Audio Handling -->
       <section class="feature-content" id="feature3">
         <div class="feature-header">
-          <h3>Multi-Track Audio Handling</h3>
-          <p>Up to 6 tracks + AudioWorklet + Submix routing</p>
+          <h3>Multi-Track Audio Processing</h3>
+          <p>Backend-Powered Multi-Track Analysis + Real-time Processing</p>
         </div>
 
-        <div class="track-limit-info">
-          <div class="track-counter">
-            <span class="track-count-current" id="currentTrackCount">0</span>
-            <span class="track-count-separator">/</span>
-            <span class="track-count-max">6</span>
-            <span class="track-count-label">Audio Tracks</span>
-          </div>
-          <div class="submix-indicator">
-            <i class="fas fa-project-diagram"></i>
-            <span>Submix Routing Active</span>
-          </div>
-        </div>
-
-        <div class="feature-controls">
-          <div class="multi-track-operations">
-            <label>Operations (All Tracks):</label>
-            <div class="operation-buttons">
-              <button class="operation-btn" id="multiSilenceDetect">
-                <i class="fas fa-volume-mute"></i> Silence Detection
-              </button>
-              <button class="operation-btn" id="multiAutoTrim">
-                <i class="fas fa-cut"></i> Auto-Trimming
-              </button>
-              <button class="operation-btn" id="multiOverlapDetect">
-                <i class="fas fa-layer-group"></i> Overlap Detection
-              </button>
-              <button class="operation-btn" id="dynamicDucking">
-                <i class="fas fa-volume-down"></i> Dynamic Ducking
+        <!-- Track Management Controls -->
+        <div class="multitrack-controls-grid">
+          <div class="multitrack-control-card">
+            <label>Track Loading</label>
+            <div class="track-status">
+              <span class="track-counter">
+                <span id="currentTrackCount">0</span>/<span>6</span> tracks loaded
+              </span>
+              <button class="multitrack-btn" id="loadMultipleAudioFiles">
+                <i class="fas fa-folder-open"></i>
+                Load Audio Files
               </button>
             </div>
           </div>
-
-          <div class="multicam-support">
-            <label class="checkbox-option">
-              <input type="checkbox" id="enableMulticam">
-              <span class="checkmark"></span>
-              Enable Multi-cam Audio Alignment (Manual Setup Required)
-            </label>
+          
+          <div class="multitrack-control-card">
+            <label>Processing Options</label>
+            <div class="multitrack-options">
+              <label class="multitrack-checkbox">
+                <input type="checkbox" id="enableMulticam">
+                <span class="checkmark"></span>
+                Multi-cam Sync
+              </label>
+            </div>
           </div>
         </div>
 
-        <div class="track-visualization" id="trackVisualization">
-          <div class="tracks-header">
-            <h4>Track Status & Routing</h4>
-            <div class="demo-track-controls">
-              <button class="demo-btn" onclick="window.audioToolsPro.addDemoTrack('speech')">
-                <i class="fas fa-microphone"></i> Add Speech Track
-              </button>
-              <button class="demo-btn" onclick="window.audioToolsPro.addDemoTrack('music')">
-                <i class="fas fa-music"></i> Add Music Track
-              </button>
-              <button class="demo-btn" onclick="window.audioToolsPro.addDemoTrack('effects')">
-                <i class="fas fa-volume-up"></i> Add Effects Track
-              </button>
-            </div>
+        <!-- Operation Buttons -->
+        <div class="multitrack-operations">
+          <button class="multitrack-operation-btn" id="multiSilenceDetect">
+            <i class="fas fa-volume-mute"></i>
+            <span>Silence Detection</span>
+          </button>
+          <button class="multitrack-operation-btn" id="multiAutoTrim">
+            <i class="fas fa-cut"></i>
+            <span>Auto-Trimming</span>
+          </button>
+          <button class="multitrack-operation-btn" id="multiOverlapDetect">
+            <i class="fas fa-layer-group"></i>
+            <span>Overlap Detection</span>
+          </button>
+          <button class="multitrack-operation-btn" id="dynamicDucking">
+            <i class="fas fa-volume-down"></i>
+            <span>Dynamic Ducking</span>
+          </button>
+        </div>
+
+        <!-- Multi-Track Visualization Container -->
+        <div class="multi-track-visualization" id="multiTrackVisualization" style="display: none;">
+          <div class="visualization-header">
+            <h4><i class="fas fa-waveform-lines"></i> Loaded Tracks</h4>
+            <span class="track-counter">
+              <span id="loadedTrackCount">0</span> tracks
+            </span>
           </div>
           <div class="tracks-container" id="tracksContainer">
-            <!-- Tracks will be populated dynamically -->
+            <!-- Track items will be populated here -->
+          </div>
+        </div>
+
+        <!-- Multi-Track Results Panel -->
+        <div class="multitrack-results" id="multitrackResults" style="display: none;">
+          <div class="results-header">
+            <h4><i class="fas fa-chart-bar"></i> Analysis Results</h4>
+            <button class="results-clear-btn" id="clearMultitrackResults">
+              <i class="fas fa-times"></i> Clear
+            </button>
+          </div>
+          <div class="results-content">
+            <div class="result-tabs">
+              <button class="result-tab active" data-tab="silence">Silence</button>
+              <button class="result-tab" data-tab="overlap">Overlaps</button>
+              <button class="result-tab" data-tab="trim">Auto-Trim</button>
+              <button class="result-tab" data-tab="ducking">Ducking</button>
+            </div>
+            <div class="result-panels">
+              <div class="result-panel active" id="silenceResults">
+                <div class="result-summary">
+                  <div class="summary-item">
+                    <span class="summary-label">Total Silence Found:</span>
+                    <span class="summary-value" id="totalSilenceFound">0s</span>
+                  </div>
+                  <div class="summary-item">
+                    <span class="summary-label">Silence Segments:</span>
+                    <span class="summary-value" id="silenceSegmentCount">0</span>
+                  </div>
+                </div>
+                <div class="result-details" id="silenceDetailsList"></div>
+              </div>
+              <div class="result-panel" id="overlapResults">
+                <div class="result-summary">
+                  <div class="summary-item">
+                    <span class="summary-label">Overlaps Found:</span>
+                    <span class="summary-value" id="totalOverlapsFound">0</span>
+                  </div>
+                  <div class="summary-item">
+                    <span class="summary-label">Sync Issues:</span>
+                    <span class="summary-value" id="syncIssuesFound">0</span>
+                  </div>
+                </div>
+                <div class="result-details" id="overlapDetailsList"></div>
+              </div>
+              <div class="result-panel" id="trimResults">
+                <div class="result-summary">
+                  <div class="summary-item">
+                    <span class="summary-label">Time Trimmed:</span>
+                    <span class="summary-value" id="totalTimeTrimmed">0s</span>
+                  </div>
+                  <div class="summary-item">
+                    <span class="summary-label">Segments Processed:</span>
+                    <span class="summary-value" id="trimSegmentCount">0</span>
+                  </div>
+                </div>
+                <div class="result-details" id="trimDetailsList"></div>
+              </div>
+              <div class="result-panel" id="duckingResults">
+                <div class="result-summary">
+                  <div class="summary-item">
+                    <span class="summary-label">Ducking Applied:</span>
+                    <span class="summary-value" id="duckingApplied">No</span>
+                  </div>
+                  <div class="summary-item">
+                    <span class="summary-label">Tracks Affected:</span>
+                    <span class="summary-value" id="duckingTracksCount">0</span>
+                  </div>
+                </div>
+                <div class="result-details" id="duckingDetailsList"></div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      <!-- Feature 4: Rhythm & Timing Correction -->
+      <!-- Feature 4: Enhanced Rhythm & Timing Correction -->
       <section class="feature-content" id="feature4">
         <div class="feature-header">
           <h3>Rhythm & Timing Correction</h3>
-          <p>Phase Vocoder + GPT-4 Analysis + Sample-accurate timing</p>
+          <p>AI-Powered Rhythm Analysis + Real-time FFmpeg Processing </p>
         </div>
 
-        <div class="feature-controls">
-          <div class="control-row">
-            <div class="control-group">
-              <label for="timingTolerance">Timing Tolerance</label>
-              <div class="slider-control">
-                <input type="range" id="timingTolerance" min="50" max="300" value="150" step="10">
-                <span class="slider-value" id="timingToleranceValue">±150ms</span>
-              </div>
-            </div>
-            <div class="control-group">
-              <label for="stretchAlgorithm">Time-Stretch Algorithm</label>
-              <select id="stretchAlgorithm" class="select-input">
-                <option value="phase_vocoder">Phase Vocoder (No Pitch Change)</option>
-                <option value="granular">Granular Synthesis</option>
-                <option value="wsola">WSOLA</option>
-              </select>
+        <!-- Enhanced Controls Grid -->
+        <div class="rhythm-controls-grid">
+          <div class="rhythm-control-card">
+            <label for="timingTolerance">Timing Tolerance</label>
+            <div class="rhythm-slider-control">
+              <input type="range" id="timingTolerance" min="50" max="300" value="150" step="10">
+              <span class="rhythm-slider-value" id="timingToleranceValue">±150ms</span>
             </div>
           </div>
-
-          <div class="timing-precision-options">
-            <label>Precision Timing Control:</label>
-            <div class="control-group">
-              <label class="checkbox-option">
-                <input type="checkbox" id="enablePreciseTiming" checked>
-                <span class="checkmark"></span>
-                Sample-Accurate Timing (±300ms)
-              </label>
-              <label class="checkbox-option">
-                <input type="checkbox" id="enableTimingValidation" checked>
-                <span class="checkmark"></span>
-                Timing Accuracy Validation
-              </label>
-            </div>
+          
+          <div class="rhythm-control-card">
+            <label for="stretchAlgorithm">Time-Stretch Algorithm</label>
+            <select id="stretchAlgorithm" class="rhythm-select">
+              <option value="phase_vocoder">🎛️ Phase Vocoder (No Pitch Change)</option>
+              <option value="granular">🔊 Granular Synthesis</option>
+              <option value="wsola">⚡ WSOLA</option>
+              <option value="time_stretching">🎵 Time Stretching</option>
+              <option value="dynamic_pacing">🤖 AI Dynamic Pacing</option>
+            </select>
           </div>
         </div>
 
-        <div class="feature-actions">
-          <button class="action-btn primary" id="analyzeRhythm">
+        <!-- Enhanced Precision Options -->
+        <div class="rhythm-precision-options">
+          <label>🎯 Precision Timing Control</label>
+          <div class="rhythm-checkbox-grid">
+            <label class="rhythm-checkbox-option">
+              <input type="checkbox" id="enablePreciseTiming" checked>
+              <span>Sample-Accurate Timing (±300ms)</span>
+            </label>
+            <label class="rhythm-checkbox-option">
+              <input type="checkbox" id="enableTimingValidation" checked>
+              <span>Timing Accuracy Validation</span>
+            </label>
+            <label class="rhythm-checkbox-option">
+              <input type="checkbox" id="enableRealTimeAnalysis" checked>
+              <span>Real-time FFmpeg Analysis</span>
+            </label>
+            <label class="rhythm-checkbox-option">
+              <input type="checkbox" id="enableAICorrections">
+              <span>AI-Powered Corrections</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Enhanced Action Buttons -->
+        <div class="rhythm-actions">
+          <button class="rhythm-btn primary" id="analyzeRhythm">
             <i class="fas fa-chart-line"></i> Analyze Rhythm
           </button>
-          <button class="action-btn secondary" id="correctTiming" disabled>
+          <button class="rhythm-btn success" id="correctTiming" disabled>
             <i class="fas fa-magic"></i> Apply Corrections
           </button>
-          <button class="action-btn secondary" id="previewCorrections" disabled>
+          <button class="rhythm-btn info" id="previewCorrections" disabled>
             <i class="fas fa-play"></i> Preview Changes
           </button>
         </div>
 
-        <div class="rhythm-analysis" id="rhythmAnalysis">
-          <div class="empty-state">
+        <!-- Enhanced Analysis Container -->
+        <div class="rhythm-analysis-container" id="rhythmAnalysis">
+          <div class="rhythm-empty-state" id="rhythmEmptyState">
             <i class="fas fa-music"></i>
             <p>Analyze rhythm to see timing patterns and correction suggestions</p>
           </div>
+          
+          <!-- Rhythm Analysis Results Panel -->
+          <div class="rhythm-results" id="rhythmResults" style="display: none;">
+            <div class="results-header">
+              <h4><i class="fas fa-music"></i> Rhythm Analysis Results</h4>
+              <button class="results-clear-btn" id="clearRhythmResults">
+                <i class="fas fa-times"></i> Clear
+              </button>
+            </div>
+            <div class="results-content">
+              <div class="rhythm-summary">
+                <div class="summary-grid">
+                  <div class="summary-card">
+                    <span class="summary-value" id="speechSegmentCount">0</span>
+                    <span class="summary-label">Speech Segments</span>
+                  </div>
+                  <div class="summary-card">
+                    <span class="summary-value" id="averagePitch">0 Hz</span>
+                    <span class="summary-label">Average Pitch</span>
+                  </div>
+                  <div class="summary-card">
+                    <span class="summary-value" id="speechRate">0 wps</span>
+                    <span class="summary-label">Speech Rate</span>
+                  </div>
+                  <div class="summary-card">
+                    <span class="summary-value" id="averageIntensity">0%</span>
+                    <span class="summary-label">Intensity</span>
+                  </div>
+                </div>
+              </div>
+              <div class="rhythm-details">
+                <h5><i class="fas fa-list"></i> Speech Segments</h5>
+                <div class="segments-list" id="speechSegmentsList">
+                  <!-- Speech segments will be populated here -->
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <!-- Timing Statistics Panel -->
+        <!-- Enhanced Timing Statistics Panel -->
         <div class="timing-stats-panel" id="timingStatsPanel" style="display: none;">
-          <h4><i class="fas fa-stopwatch"></i> Precision Timing Statistics</h4>
-          <div id="timingStats" class="timing-stats">
-            <div class="stats-grid">
-              <div class="stat-item">
-                <span class="stat-label">Scheduled Events:</span>
-                <span class="stat-value">0</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Average Error:</span>
-                <span class="stat-value">0.0ms</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Max Error:</span>
-                <span class="stat-value">0.0ms</span>
-              </div>
+          <div class="rhythm-analysis-header">
+            <i class="fas fa-stopwatch"></i>
+            <h4>Precision Timing Statistics</h4>
+            <span class="status-badge">Active</span>
+          </div>
+          <div id="timingStats" class="rhythm-metrics-grid">
+            <div class="rhythm-metric-card">
+              <span class="rhythm-metric-value">0</span>
+              <span class="rhythm-metric-label">Scheduled Events</span>
+            </div>
+            <div class="rhythm-metric-card">
+              <span class="rhythm-metric-value">0.0ms</span>
+              <span class="rhythm-metric-label">Average Error</span>
+            </div>
+            <div class="rhythm-metric-card">
+              <span class="rhythm-metric-value">0.0ms</span>
+              <span class="rhythm-metric-label">Max Error</span>
+            </div>
+            <div class="rhythm-metric-card">
+              <span class="rhythm-metric-value">0%</span>
+              <span class="rhythm-metric-label">Success Rate</span>
+            </div>
+          </div>
+        </div>
               <div class="stat-item">
                 <span class="stat-label">Within Tolerance:</span>
                 <span class="stat-value">0/0</span>
@@ -1376,6 +1468,12 @@
   <script src="advanced-time-stretching.js"></script>
   <script src="precise-timing-scheduler.js"></script>
   <script src="rhythm-timing-integration.js"></script>
+  <!-- MultiTrack Integration Module -->
+  <script src="modules/MultiTrackIntegration.js"></script>
+  <!-- Rhythm Integration Module -->
+  <script src="modules/RhythmIntegration.js"></script>
+  <!-- Silence Integration Module -->
+  <script src="modules/SilenceIntegration.js"></script>
   <script src="index.js"></script>
 </body>
 

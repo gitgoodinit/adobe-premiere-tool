@@ -2,6 +2,15 @@
   "version": "1.0.0",
   "lastUpdated": "2025-10-01T11:25:33.936Z",
   "environment": "development",
+  "server": {
+    "port": 3000,
+    "host": "localhost",
+    "baseURL": "http://localhost:3000",
+    "allowedOrigins": ["http://localhost:3000", "http://localhost:8080", "https://localhost:8080"],
+    "enableCors": true,
+    "maxRequestSize": "100mb",
+    "requestTimeout": 30000
+  },
   "api": {
     "openai": {
       "apiKey": "",
@@ -17,6 +26,17 @@
       "model": "latest_long",
       "enabled": false
     }
+  },
+  "multitrack": {
+    "maxTracks": 6,
+    "maxFileSize": 104857600,
+    "supportedFormats": ["mp3", "wav", "m4a", "aac", "ogg", "flac"],
+    "analysisTypes": ["silence", "overlap", "sync", "rhythm"],
+    "syncMethods": ["auto", "manual", "cross-correlation"],
+    "duckingAlgorithms": ["auto", "manual", "sidechain"],
+    "submixGroups": ["main", "speech", "music", "effects"],
+    "enableRealTimeProcessing": true,
+    "enableSubmixRouting": true
   },
   "processing": {
     "audioBufferSize": 4096,

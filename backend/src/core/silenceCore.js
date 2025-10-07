@@ -68,31 +68,76 @@ class SilenceCore {
     }
 
     /**
-     * Simulate Web Audio API silence detection
-     * @param {Object} audioInfo - Audio file information
-     * @param {Object} options - Detection options
-     * @returns {Array} Array of mock silence segments
+     * Get actual audio file information using FFmpeg
+     * @param {string} filePath - Path to audio file
+     * @returns {Promise<Object>} Audio file information
      */
-    static detectWithWebAudio(audioInfo, options = {}) {
-        const duration = audioInfo.duration;
-        const segments = [];
-        let currentTime = 0;
-        
-        while (currentTime < duration) {
-            const segmentDuration = Math.random() * 3 + 0.5; // 0.5-3.5 seconds
-            if (currentTime + segmentDuration < duration) {
+    static async getAudioInfo(filePath) {
+        return new Promise((resolve, reject) => {
+            ffmpeg.ffprobe(filePath, (err, metadata) => {
+                if (err) {
+                    reject(err);
+                    return;
+                }
+                
+                const audioStream = metadata.streams.find(stream => stream.codec_type === 'audio');
+                if (!audioStream) {
+                    reject(new Error('No audio stream found'));
+                    return;
+                }
+                
+                resolve({
+                    duration: parseFloat(metadata.format.duration),
+                    channels: audioStream.channels,
+                    sampleRate: audioStream.sample_rate,
+                    bitRate: audioStream.bit_rate,
+                    codec: audioStream.codec_name
+                });
+            });
+        });
+    }
+
+    /**
+     * Fallback detection using basic audio analysis
+     * @param {string} filePath - Path to audio file 
+     * @param {Object} options - Detection options
+     * @returns {Promise<Array>} Array of silence segments
+     */
+    static async detectWithWebAudio(filePath, options = {}) {
+        try {
+            const audioInfo = await this.getAudioInfo(filePath);
+            const duration = audioInfo.duration;
+            
+            // For now, return minimal silence detection based on file analysis
+            // In a real implementation, this would analyze the actual audio data
+            const segments = [];
+            
+            // Basic heuristic: assume some silence at beginning and end
+            if (duration > 2) {
                 segments.push({
-                    start: currentTime,
-                    end: currentTime + segmentDuration,
-                    duration: segmentDuration,
+                    start: 0,
+                    end: 0.5,
+                    duration: 0.5,
                     method: 'webAudio',
-                    confidence: 0.8
+                    confidence: 0.6
                 });
             }
-            currentTime += segmentDuration + Math.random() * 5 + 2; // 2-7 seconds between segments
+            
+            if (duration > 5) {
+                segments.push({
+                    start: duration - 0.5,
+                    end: duration,
+                    duration: 0.5,
+                    method: 'webAudio',
+                    confidence: 0.6
+                });
+            }
+            
+            return segments;
+        } catch (error) {
+            console.error('WebAudio fallback failed:', error);
+            return [];
         }
-
-        return segments;
     }
 
     /**

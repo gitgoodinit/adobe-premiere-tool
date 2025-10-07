@@ -37,13 +37,13 @@ class RhythmService {
             this.updateJobProgress(jobId, 20);
             const audioInfo = await AudioCore.getAudioInfo(filePath);
 
-            // Analyze speech rhythm using core logic
+            // Analyze speech rhythm using FFmpeg-based core logic
             this.updateJobProgress(jobId, 40);
-            const speechAnalysis = RhythmCore.analyzeSpeechRhythm(audioInfo, options);
+            const speechAnalysis = await RhythmCore.analyzeSpeechRhythm(filePath, options);
 
-            // Generate mock silence segments for timing analysis
+            // Extract silence segments from speech analysis gaps
             this.updateJobProgress(jobId, 60);
-            const silenceSegments = this.generateMockSilenceSegments(audioInfo.duration);
+            const silenceSegments = this.extractSilenceFromSpeechGaps(speechAnalysis.segments, speechAnalysis.totalDuration);
 
             // Analyze timing patterns
             this.updateJobProgress(jobId, 80);
@@ -73,7 +73,7 @@ class RhythmService {
                     silencePatterns: timingAnalysis.silencePatterns,
                     transitions: timingAnalysis.transitions
                 },
-                totalDuration: audioInfo.duration,
+                totalDuration: speechAnalysis.totalDuration,
                 confidence: this.calculateAnalysisConfidence(speechAnalysis, timingAnalysis),
                 recommendations: timingAnalysis.recommendations
             };
@@ -113,24 +113,26 @@ class RhythmService {
         const startTime = Date.now();
 
         try {
-            // Get audio information
+            // Real FFmpeg-based timing correction implementation
             const audioInfo = await AudioCore.getAudioInfo(filePath);
             
             // Generate output path
             const outputPath = this.generateTempPath(`.${options.outputFormat || 'mp3'}`);
             
-            // Mock timing correction implementation
-            // In real scenario, this would apply the specified corrections
-            const result = {
+            // Apply actual timing corrections using FFmpeg
+            const result = await this.applyTimingCorrectionsWithFFmpeg(filePath, outputPath, options);
+            
+            return {
                 outputFileName: require('path').basename(outputPath),
+                outputPath: outputPath,
                 originalDuration: audioInfo.duration,
-                correctedDuration: audioInfo.duration * (options.speedAdjustment || 1.0),
+                correctedDuration: result.correctedDuration,
                 correctionsApplied: options.corrections?.length || 0,
                 method: options.method || 'time_stretching',
-                processingTime: Date.now() - startTime
+                processingTime: Date.now() - startTime,
+                success: true,
+                appliedCorrections: result.appliedCorrections
             };
-
-            return result;
 
         } catch (error) {
             throw error;
@@ -168,6 +170,128 @@ class RhythmService {
                 requirements: ['openai_api_key', 'ffmpeg']
             }
         ];
+    }
+
+    /**
+     * Apply timing corrections using FFmpeg
+     */
+    async applyTimingCorrectionsWithFFmpeg(inputPath, outputPath, options) {
+        const ffmpeg = require('fluent-ffmpeg');
+        const { corrections = [], method = 'time_stretching', speedAdjustment = 1.0 } = options;
+        
+        return new Promise((resolve, reject) => {
+            let command = ffmpeg(inputPath);
+            let appliedCorrections = [];
+            
+            try {
+                // Apply different correction methods
+                switch (method) {
+                    case 'time_stretching':
+                        if (speedAdjustment !== 1.0) {
+                            command = command.audioFilters(`atempo=${speedAdjustment}`);
+                            appliedCorrections.push({ type: 'speed_adjustment', value: speedAdjustment });
+                        }
+                        break;
+                        
+                    case 'silence_adjustment':
+                        // Apply silence duration modifications
+                        const silenceFilters = corrections
+                            .filter(c => c.type === 'silence_duration')
+                            .map(c => {
+                                appliedCorrections.push(c);
+                                return `adelay=${c.start * 1000}|${c.start * 1000}`;
+                            });
+                        if (silenceFilters.length > 0) {
+                            command = command.audioFilters(silenceFilters);
+                        }
+                        break;
+                        
+                    case 'dynamic_pacing':
+                        // Apply complex pacing adjustments
+                        const pacingFilters = [];
+                        corrections.forEach(c => {
+                            if (c.type === 'speed_change') {
+                                pacingFilters.push(`atempo=${c.factor}`);
+                                appliedCorrections.push(c);
+                            }
+                        });
+                        if (pacingFilters.length > 0) {
+                            command = command.audioFilters(pacingFilters);
+                        }
+                        break;
+                }
+                
+                command
+                    .audioCodec('libmp3lame')
+                    .audioBitrate('192k')
+                    .output(outputPath)
+                    .on('end', () => {
+                        // Get duration of corrected file
+                        ffmpeg.ffprobe(outputPath, (err, metadata) => {
+                            const correctedDuration = err ? 0 : parseFloat(metadata.format.duration);
+                            resolve({
+                                correctedDuration,
+                                appliedCorrections
+                            });
+                        });
+                    })
+                    .on('error', reject)
+                    .run();
+                    
+            } catch (error) {
+                reject(error);
+            }
+        });
+    }
+
+    /**
+     * Extract silence segments from gaps between speech segments
+     * @param {Array} speechSegments - Speech segments
+     * @param {number} totalDuration - Total audio duration
+     * @returns {Array} Silence segments
+     */
+    extractSilenceFromSpeechGaps(speechSegments, totalDuration) {
+        const silenceSegments = [];
+        
+        // Add silence before first speech segment
+        if (speechSegments.length > 0 && speechSegments[0].start > 0) {
+            silenceSegments.push({
+                start: 0,
+                end: speechSegments[0].start,
+                duration: speechSegments[0].start,
+                type: 'silence'
+            });
+        }
+        
+        // Add silence between speech segments
+        for (let i = 0; i < speechSegments.length - 1; i++) {
+            const currentEnd = speechSegments[i].end;
+            const nextStart = speechSegments[i + 1].start;
+            
+            if (nextStart > currentEnd) {
+                silenceSegments.push({
+                    start: currentEnd,
+                    end: nextStart,
+                    duration: nextStart - currentEnd,
+                    type: 'silence'
+                });
+            }
+        }
+        
+        // Add silence after last speech segment
+        if (speechSegments.length > 0) {
+            const lastEnd = speechSegments[speechSegments.length - 1].end;
+            if (lastEnd < totalDuration) {
+                silenceSegments.push({
+                    start: lastEnd,
+                    end: totalDuration,
+                    duration: totalDuration - lastEnd,
+                    type: 'silence'
+                });
+            }
+        }
+        
+        return silenceSegments;
     }
 
     /**

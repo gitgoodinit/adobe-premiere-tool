@@ -31,16 +31,37 @@ const validation = require('./src/middleware/validation');
 const CacheService = require('./src/services/cacheService');
 const Logger = require('./src/utils/logger');
 
+
 class AudioToolsBackend {
     constructor() {
         this.app = express();
-        this.port = process.env.PORT || 3000;
+        this.loadConfiguration();
         this.cache = new CacheService();
         this.logger = new Logger();
         
         this.setupMiddleware();
         this.setupRoutes();
         this.setupErrorHandling();
+    }
+
+    loadConfiguration() {
+        try {
+            const configPath = path.join(__dirname, 'config', 'settings.json');
+            const configData = fs.readFileSync(configPath, 'utf8');
+            this.config = JSON.parse(configData);
+            
+            // Apply configuration with environment variable overrides
+            this.port = process.env.PORT || this.config.server?.port || 3000;
+            this.host = process.env.HOST || this.config.server?.host || 'localhost';
+            this.allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || this.config.server?.allowedOrigins || ['http://localhost:3000', 'http://localhost:8080'];
+            
+        } catch (error) {
+            console.warn('Failed to load configuration, using defaults:', error.message);
+            this.config = {};
+            this.port = process.env.PORT || 3000;
+            this.host = process.env.HOST || 'localhost';
+            this.allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000', 'http://localhost:8080'];
+        }
     }
 
     setupMiddleware() {
@@ -51,7 +72,7 @@ class AudioToolsBackend {
 
         // CORS configuration
         this.app.use(cors({
-            origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000', 'http://localhost:8080'],
+            origin: this.allowedOrigins,
             credentials: true,
             methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
             allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
@@ -59,8 +80,8 @@ class AudioToolsBackend {
 
         // Rate limiting
         const limiter = rateLimit({
-            windowMs: 15 * 60 * 1000, // 15 minutes
-            max: 100, // limit each IP to 100 requests per windowMs
+            windowMs: this.config.advanced?.rateLimitWindow || 15 * 60 * 1000, // 15 minutes
+            max: this.config.advanced?.rateLimitMax || 100, // limit each IP to 100 requests per windowMs
             message: {
                 error: 'Too many requests from this IP, please try again later.',
                 retryAfter: '15 minutes'
@@ -84,8 +105,8 @@ class AudioToolsBackend {
         this.app.use(requestLogger);
 
         // Body parsing
-        this.app.use(express.json({ limit: '50mb' }));
-        this.app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+        this.app.use(express.json({ limit: this.config.server?.maxRequestSize || '50mb' }));
+        this.app.use(express.urlencoded({ extended: true, limit: this.config.server?.maxRequestSize || '50mb' }));
 
         // Static files
         this.app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -193,10 +214,10 @@ class AudioToolsBackend {
             await this.cache.initialize();
 
             // Start server
-            this.app.listen(this.port, () => {
-                this.logger.info(`🚀 Audio Tools Pro Backend Server running on port ${this.port}`);
-                this.logger.info(`📚 API Documentation: http://localhost:${this.port}/api/docs`);
-                this.logger.info(`🏥 Health Check: http://localhost:${this.port}/api/health`);
+            this.app.listen(this.port, this.host, () => {
+                this.logger.info(`🚀 Audio Tools Pro Backend Server running on ${this.host}:${this.port}`);
+                this.logger.info(`📚 API Documentation: http://${this.host}:${this.port}/api/docs`);
+                this.logger.info(`🏥 Health Check: http://${this.host}:${this.port}/api/health`);
             });
 
             // Graceful shutdown

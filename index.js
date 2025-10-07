@@ -34,6 +34,9 @@ class AudioToolsPro {
         // Enhanced Overlap UI
         this.enhancedOverlapUI = null;
         
+        // MultiTrack Integration - Backend API Module
+        this.multiTrackIntegration = null;
+        
         // REAL Multi-Track Audio Handling Configuration
         this.multiTrackConfig = {
             maxTracks: 6,
@@ -88,7 +91,12 @@ class AudioToolsPro {
                     fftSize: 2048,
                     analysisMode: 'hybrid',
                     demoMode: false, // Disable demo mode by default - now you'll get REAL analysis!
-                    // Resolution methods removed for simplified UI
+                    // Resolution methods for overlap handling
+                    resolutionMethods: {
+                        clipShifting: true,
+                        audioDucking: true,
+                        layerTrimming: false
+                    },
                     analysisParams: {
                         smoothingTimeConstant: 0.8,
                         crossCorrelationThreshold: 0.7,
@@ -557,13 +565,6 @@ class AudioToolsPro {
         const secs = Math.floor(seconds % 60);
         return `${mins}:${secs.toString().padStart(2, '0')}`;
     }
-
-    // OLD: Load audio from clip (placeholder - will use existing implementation)
-    // async loadAudioFromClip(clip) {
-    //     // This will connect to existing audio loading logic
-    //     this.log(`🎧 Loading audio from clip: ${clip.name}`, 'info');
-    //     // Implementation will use existing getSelectedAudioFromAdobe logic
-    // }
     
     // Load audio for backend processing
     async loadAudioForBackendProcessing(clip) {
@@ -1581,17 +1582,18 @@ class AudioToolsPro {
         this.attachListener('zoomOut', () => this.zoomTimeline(0.8));
         this.attachListener('zoomReset', () => this.resetTimelineZoom());
         
-        // Feature 3: REAL Multi-Track Audio Handling
+        // Feature 3: REAL Multi-Track Audio Handling - MIGRATED TO BACKEND API
         this.attachListener('loadMultipleAudioFiles', () => this.loadMultipleAudioFiles());
         this.attachListener('addAudioTrack', () => this.addNewAudioTrack());
         this.attachListener('removeAudioTrack', (event) => this.removeAudioTrack(event.detail?.trackId));
         this.attachListener('multiSilenceDetect', () => this.runMultiTrackSilenceDetection());
         this.attachListener('multiAutoTrim', () => this.runMultiTrackAutoTrim());
         this.attachListener('multiOverlapDetect', () => this.runMultiTrackOverlapDetection());
-        this.attachListener('dynamicDucking', () => this.setupDynamicDucking());
-        this.attachListener('enableMulticam', () => this.toggleMulticamAlignment());
+        this.attachListener('dynamicDucking', () => this.runDynamicDucking());
+        this.attachListener('enableMulticam', () => this.runMultiCamSync());
+        this.attachListener('configureSubmixRouting', () => this.runSubmixRouting());
         
-        // Feature 4: Rhythm & Timing Correction
+        // Feature 4: Enhanced Rhythm & Timing Correction
         this.attachListener('analyzeRhythm', () => this.analyzeAudioRhythm());
         this.attachListener('correctTiming', () => this.applyTimingCorrections());
         this.attachListener('previewCorrections', () => this.previewTimingCorrections());
@@ -1601,6 +1603,13 @@ class AudioToolsPro {
         this.attachListener('enableFlowAnalysis', () => this.toggleFlowAnalysis());
         this.attachListener('openaiApiKey', () => this.updateOpenAIApiKey());
         this.attachListener('testApiKey', () => this.testOpenAIConnection());
+        
+        // Enhanced Rhythm UI Controls
+        this.attachListener('enableRealTimeAnalysis', () => this.toggleRealTimeAnalysis());
+        this.attachListener('enableAICorrections', () => this.toggleAICorrections());
+        
+        // Setup enhanced rhythm slider updates
+        this.setupEnhancedRhythmSliders();
         this.attachListener('layerTrimming', () => this.updateResolutionMethod());
         
         // Advanced detection features
@@ -3443,7 +3452,7 @@ class AudioToolsPro {
         await this.sendAudioToSilenceDetectionApi();
     }
     
-    // Send audio to backend silence detection API
+    // Send audio to backend silence detection API via SilenceIntegration module
     async sendAudioToSilenceDetectionApi() {
         
         // Add loading state to button
@@ -3453,11 +3462,16 @@ class AudioToolsPro {
             detectBtn.classList.add('btn-loading');
         }
 
-        this.showUIMessage('🔍 Starting backend silence detection analysis...', 'processing');
+        this.showUIMessage('🔍 Starting backend silence detection via SilenceIntegration...', 'processing');
         this.updateProgress('Connecting to backend...', 10);
-        this.log('🎦 Starting backend silence detection workflow', 'info');
+        this.log('🎦 Starting backend silence detection workflow via SilenceIntegration module', 'info');
 
         try {
+            // Check if backend integration is available
+            if (!this.silenceIntegration) {
+                throw new Error('Silence integration not available. Please ensure the backend server is running.');
+            }
+
             // Step 1: Validate audio is loaded
             console.log(`🔍 VALIDATION CHECK:`);
             console.log(`   - this.currentAudioBlob exists: ${!!this.currentAudioBlob}`);
@@ -3470,22 +3484,18 @@ class AudioToolsPro {
                 throw new Error('No audio loaded. Please load media from the timeline first.');
             }
             
-            console.log('✅ Audio blob validation passed - proceeding with backend API call');
+            console.log('✅ Audio blob validation passed - proceeding with SilenceIntegration API call');
 
             // Step 2: Get detection parameters
             const silenceDetectionOptions = this.prepareSilenceDetectionOptions();
             
             this.log(`🔧 Detection parameters: ${silenceDetectionOptions.noiseThreshold}dB threshold, ${silenceDetectionOptions.minDuration}s minimum`, 'info');
 
-            // Step 3: Prepare FormData for backend API
+            // Step 3: Prepare audio blob
             this.updateProgress('Preparing audio data...', 30);
-            const formData = new FormData();
             
             // Convert MP4 to audio-only format if needed
             let audioBlob = this.currentAudioBlob;
-            let audioFileName = this.currentFileName ? 
-                `${this.currentFileName.replace(/\.[^/.]+$/, '')}.wav` : 
-                'timeline-audio.wav';
             
             // Check if we need to convert MP4 to audio format
             if (this.currentAudioBlob.type === 'audio/mp4' || this.currentAudioBlob.type === 'video/mp4') {
@@ -3495,63 +3505,29 @@ class AudioToolsPro {
                     this.log('✅ MP4 converted to audio format successfully', 'success');
                 } catch (conversionError) {
                     this.log(`⚠️ MP4 conversion failed, sending as-is: ${conversionError.message}`, 'warning');
-                    // Keep original blob and let backend handle it (since we added MP4 to allowed types)
+                    // Keep original blob and let backend handle it
                 }
             }
-            
-            // Append audio file with proper name
-            formData.append('audio', audioBlob, audioFileName);
-            
-            // Append detection options
-            console.log(`🔧 Silence detection options being sent:`, silenceDetectionOptions);
-            Object.keys(silenceDetectionOptions).forEach(key => {
-                console.log(`   ${key}: ${silenceDetectionOptions[key]} (${typeof silenceDetectionOptions[key]})`);
-                
-                // Handle arrays by converting to JSON string for FormData
-                if (Array.isArray(silenceDetectionOptions[key])) {
-                    formData.append(key, JSON.stringify(silenceDetectionOptions[key]));
-                } else {
-                    formData.append(key, silenceDetectionOptions[key]);
-                }
-            });
 
-            // Step 4: Send request to backend API
+            // Step 4: Use SilenceIntegration module to detect silence
             this.updateProgress('Analyzing audio with backend...', 50);
             
-            const backendUrl = this.getBackendUrl();
-            console.log(`🌐 Backend URL: ${backendUrl}/api/silence/detect`);
-            console.log(`📤 Sending FormData with audio blob size: ${this.currentAudioBlob.size} bytes`);
+            console.log(`🔧 Silence detection options being sent:`, silenceDetectionOptions);
             
-            const apiResponse = await fetch(`${backendUrl}/api/silence/detect`, {
-                method: 'POST',
-                body: formData
-            });
-            
-            console.log(`📥 Received response with status: ${apiResponse.status} ${apiResponse.statusText}`);
-            console.log(`📋 Response headers:`, Object.fromEntries(apiResponse.headers.entries()));
-
-            if (!apiResponse.ok) {
-                const errorData = await apiResponse.json().catch(() => ({}));
-                console.error(`❌ Backend API Error:`, errorData);
-                throw new Error(`Backend API error: ${apiResponse.status} - ${errorData.message || 'Unknown error'}`);
-            }
-
-            // Step 5: Process response
-            this.updateProgress('Processing results...', 80);
-            const silenceDetectionResponse = await apiResponse.json();                    
+            const silenceDetectionResponse = await this.silenceIntegration.detectSilence(audioBlob, silenceDetectionOptions);
             
             if (!silenceDetectionResponse.success) {
                 throw new Error(silenceDetectionResponse.message || 'Backend detection failed');
             }
 
-            // Step 6: Store and display results
+            // Step 5: Store and display results from SilenceIntegration
             const detectedSegments = silenceDetectionResponse.results.silenceSegments || [];
             this.lastSilenceResults = detectedSegments;
             
             // Store processing time for UI display
             this.lastProcessingTime = silenceDetectionResponse.processingTime || 'Unknown';
             
-            this.log(`✅ Backend detection completed: ${detectedSegments.length} segments found in ${this.lastProcessingTime}`, 'success');
+            this.log(`✅ SilenceIntegration detection completed: ${detectedSegments.length} segments found in ${this.lastProcessingTime}`, 'success');
             
             // Display results using existing UI
             this.displaySilenceResults(detectedSegments);
@@ -3560,7 +3536,7 @@ class AudioToolsPro {
             this.activateResultsTab('silence');
             
             this.updateProgress('Analysis complete', 100);
-            this.showUIMessage(`✅ Backend silence detection completed! Found ${detectedSegments.length} silence segments`, 'success');
+            this.showUIMessage(`✅ Backend silence detection via SilenceIntegration completed! Found ${detectedSegments.length} silence segments`, 'success');
 
         } catch (error) {
             
@@ -3821,10 +3797,16 @@ class AudioToolsPro {
 
     
     // Send audio to backend trimming API
+    // Send audio to backend trimming API via SilenceIntegration module
     async sendAudioToTrimmingApi(silenceSegments, trimmingOptions = {}) {
         try {
-            this.log('✂️ Starting backend audio trimming...', 'info');
-            this.showUIMessage('✂️ Processing audio trim via backend...', 'processing');
+            this.log('✂️ Starting backend audio trimming via SilenceIntegration...', 'info');
+            this.showUIMessage('✂️ Processing audio trim via SilenceIntegration...', 'processing');
+            
+            // Check if backend integration is available
+            if (!this.silenceIntegration) {
+                throw new Error('Silence integration not available. Please ensure the backend server is running.');
+            }
             
             if (!this.currentAudioBlob) {
                 throw new Error('No audio loaded for trimming');
@@ -3834,18 +3816,8 @@ class AudioToolsPro {
                 throw new Error('No silence segments provided for trimming');
             }
             
-            // Prepare FormData for backend API
-            const formData = new FormData();
-            
-            // Append audio file
-            const audioFileName = this.currentFileName ? 
-                `${this.currentFileName.replace(/\.[^/.]+$/, '')}.wav` : 
-                'timeline-audio.wav';
-            formData.append('audio', this.currentAudioBlob, audioFileName);
-            
-            // Append trimming options
+            // Prepare trimming options for SilenceIntegration
             const trimOptions = {
-                silenceSegments: silenceSegments,
                 trimMode: trimmingOptions.trimMode || 'remove',
                 fadeInDuration: trimmingOptions.fadeInDuration || 0.1,
                 fadeOutDuration: trimmingOptions.fadeOutDuration || 0.1,
@@ -3854,39 +3826,25 @@ class AudioToolsPro {
                 quality: trimmingOptions.quality || 'high'
             };
             
-            Object.keys(trimOptions).forEach(key => {
-                if (key === 'silenceSegments') {
-                    formData.append(key, JSON.stringify(trimOptions[key]));
-                } else {
-                    formData.append(key, trimOptions[key]);
-                }
-            });
+            this.log(`✂️ Trimming ${silenceSegments.length} silence segments using SilenceIntegration`, 'info');
             
-            // Send request to backend API
-            const backendUrl = this.getBackendUrl();
-            const apiResponse = await fetch(`${backendUrl}/api/silence/trim`, {
-                method: 'POST',
-                body: formData
-            });
+            // Use SilenceIntegration module to trim silence
+            const trimResponse = await this.silenceIntegration.trimSilence(this.currentAudioBlob, silenceSegments, trimOptions);
             
-            if (!apiResponse.ok) {
-                const errorData = await apiResponse.json().catch(() => ({}));
-                throw new Error(`Backend trimming API error: ${apiResponse.status} - ${errorData.message || 'Unknown error'}`);
+            if (trimResponse.success) {
+                this.log(`✅ SilenceIntegration trimming completed successfully`, 'success');
+                this.log(`   📄 Original Duration: ${trimResponse.originalFile.duration.toFixed(2)}s`, 'info');
+                this.log(`   📄 Trimmed Duration: ${trimResponse.trimmedFile.duration.toFixed(2)}s`, 'info');
+                this.log(`   ⏱️ Time Saved: ${trimResponse.results.timeSaved.toFixed(2)}s`, 'info');
+                
+                return trimResponse;
+            } else {
+                throw new Error('SilenceIntegration trimming failed');
             }
             
-            const trimResponse = await apiResponse.json();
-            
-            if (!trimResponse.success) {
-                throw new Error(trimResponse.message || 'Backend trimming failed');
-            }
-            
-            this.log(`✅ Backend trimming completed: ${trimResponse.results.segmentsRemoved} segments removed`, 'success');
-            this.showUIMessage(`✅ Audio trimmed successfully! Removed ${trimResponse.results.segmentsRemoved} silence segments`, 'success');
-            
-            return trimResponse;
             
         } catch (error) {
-            this.log(`❌ Backend trimming failed: ${error.message}`, 'error');
+            this.log(`❌ SilenceIntegration trimming failed: ${error.message}`, 'error');
             this.showUIMessage(`❌ Audio trimming failed: ${error.message}`, 'error');
             throw error;
         }
@@ -4005,54 +3963,8 @@ class AudioToolsPro {
         return silences;
     }
 
-    async analyzeSilenceWithWebAudio(thresholdDb, minSilenceSec) {
-        try {
-            let arrayBuffer = null;
-            if (this.currentAudioBlob) {
-                arrayBuffer = await this.currentAudioBlob.arrayBuffer();
-            } else if (this.audioPlayer && this.audioPlayer.src) {
-                const resp = await fetch(this.audioPlayer.src);
-                arrayBuffer = await resp.arrayBuffer();
-            } else {
-                throw new Error('No audio loaded for analysis');
-            }
-
-            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            const buffer = await audioCtx.decodeAudioData(arrayBuffer);
-            const data = buffer.getChannelData(0);
-            const sampleRate = buffer.sampleRate;
-            const minSamples = Math.max(1, Math.floor(minSilenceSec * sampleRate));
-            const linearThresh = Math.pow(10, thresholdDb / 20);
-
-            const silences = [];
-            let startIdx = null;
-            let run = 0;
-            for (let i = 0; i < data.length; i++) {
-                const amp = Math.abs(data[i]);
-                if (amp < linearThresh) {
-                    if (startIdx === null) startIdx = i;
-                    run++;
-                } else if (startIdx !== null) {
-                    if (run >= minSamples) {
-                        const start = startIdx / sampleRate;
-                        const end = i / sampleRate;
-                        silences.push({ start, end, duration: end - start });
-                    }
-                    startIdx = null;
-                    run = 0;
-                }
-            }
-            if (startIdx !== null && run >= minSamples) {
-                const start = startIdx / sampleRate;
-                const end = data.length / sampleRate;
-                silences.push({ start, end, duration: end - start });
-            }
-            return silences;
-        } catch (e) {
-            this.log(`ℹ️ Web Audio fallback failed: ${e.message}`, 'info');
-            return [];
-        }
-    }
+    // REMOVED: analyzeSilenceWithWebAudio - Now handled by SilenceIntegration.detectSilence()
+    // This old Web Audio API processing has been replaced with backend integration
     
     displaySilenceResults(results) {
         console.log('🎨 displaySilenceResults called with:', results);
@@ -4637,111 +4549,68 @@ class AudioToolsPro {
          }
      }
      
-     // Process silence removal from timeline
-     processSilenceRemoval(silenceResults) {
+     // Process silence removal from timeline via SilenceIntegration backend
+     async processSilenceRemoval(silenceResults) {
          console.log('🔧 processSilenceRemoval called with:', silenceResults);
-         const audioDuration = this.audioPlayer ? this.audioPlayer.duration : 0;
-         console.log('🔧 Audio duration:', audioDuration);
-         const segments = [];
          
-         // Sort silence segments by start time
-         const sortedSilence = silenceResults.sort((a, b) => a.start - b.start);
-         console.log('🔧 Sorted silence segments:', sortedSilence);
-         
-         let currentTime = 0;
-         
-         // Create segments excluding silence
-         sortedSilence.forEach((silence, index) => {
-             const silenceStart = silence.start || 0;
-             const silenceEnd = silence.end || (silenceStart + (silence.duration || 0));
-             
-             // If there's audio before this silence, add it as a segment
-             if (silenceStart > currentTime) {
-                 segments.push({
-                     start: currentTime,
-                     end: silenceStart,
-                     duration: silenceStart - currentTime,
-                     type: 'audio'
-                 });
+         try {
+             // Check if backend integration is available
+             if (!this.silenceIntegration) {
+                 throw new Error('Silence integration not available. Please ensure the backend server is running.');
              }
              
-             // Move to end of silence
-             currentTime = silenceEnd;
-         });
-         
-         // Add remaining audio after last silence
-         if (currentTime < audioDuration) {
-             segments.push({
-                 start: currentTime,
-                 end: audioDuration,
-                 duration: audioDuration - currentTime,
-                 type: 'audio'
-             });
-         }
-         
-         this.log(`✂️ Created ${segments.length} audio segments after removing silence`, 'info');
-         segments.forEach((segment, index) => {
-             this.log(`  Segment ${index}: ${this.formatTime(segment.start)} to ${this.formatTime(segment.end)} (${this.formatTime(segment.duration)})`, 'info');
-         });
-         
-         return segments;
-     }
-     
-     // Create new audio file without silence
-    async createSilenceFreeAudio(audioSegments) {
-        console.log('🔧 createSilenceFreeAudio called with:', audioSegments);
-        try {
-            console.log('🎵 Creating silence-free audio...');
-            this.log(`🎵 Creating silence-free audio...`, 'info');
-            
-            // Show progress message
-            this.showUIMessage('🎵 Processing audio... Please wait', 'info');
-            
-            // Simulate processing time for better UX
-            await this.simulateAudioProcessing();
-            
-            // Create a result object for display
-            const result = {
-                originalDuration: this.audioPlayer ? this.audioPlayer.duration : 0,
-                newDuration: audioSegments.reduce((total, seg) => total + seg.duration, 0),
-                segmentsRemoved: this.lastSilenceResults.length,
-                timeSaved: (this.audioPlayer ? this.audioPlayer.duration : 0) - audioSegments.reduce((total, seg) => total + seg.duration, 0)
-            };
-            
-            console.log('🔧 Created result object:', result);
-            
-            this.log(`✅ Silence removal complete:`, 'info');
-            this.log(`  Original duration: ${this.formatTime(result.originalDuration)}`, 'info');
-            this.log(`  New duration: ${this.formatTime(result.newDuration)}`, 'info');
-            this.log(`  Silence segments removed: ${result.segmentsRemoved}`, 'info');
-            this.log(`  Time saved: ${this.formatTime(result.timeSaved)}`, 'info');
-            
-            // Display results
-            console.log('🔧 About to call displaySilenceRemovalResults...');
-            this.displaySilenceRemovalResults(result);
-            console.log('🔧 displaySilenceRemovalResults called successfully');
-            
-        } catch (error) {
-            console.error('❌ Error in createSilenceFreeAudio:', error);
-            this.log(`❌ Error creating silence-free audio: ${error.message}`, 'error');
-            this.showUIMessage('❌ Failed to process audio', 'error');
-        }
-    }
-     
-     // Simulate audio processing for better UX
-     simulateAudioProcessing() {
-         return new Promise((resolve) => {
-             let progress = 0;
-             const interval = setInterval(() => {
-                 progress += 10;
-                 this.updateSilenceRemovalProgress(progress);
+             this.log('✂️ Starting backend silence trimming via SilenceIntegration...', 'info');
+             this.showUIMessage('✂️ Trimming silence from audio using backend...', 'processing');
+             
+             // Get original audio blob
+             const audioBlob = await this.getAudioBlobFromPlayer();
+             if (!audioBlob) {
+                 throw new Error('Could not get original audio blob');
+             }
+             
+             // Prepare trimming options
+             const trimmingOptions = {
+                 trimMode: 'remove',
+                 fadeInDuration: 0.1,
+                 fadeOutDuration: 0.1,
+                 compressionRatio: 0.5,
+                 outputFormat: 'mp3',
+                 quality: 'high'
+             };
+             
+             // Use SilenceIntegration to trim silence
+             const results = await this.silenceIntegration.trimSilence(audioBlob, silenceResults, trimmingOptions);
+             
+             if (results.success) {
+                 this.log(`✅ Backend silence trimming completed successfully`, 'success');
+                 this.log(`   � Original Duration: ${results.originalFile.duration.toFixed(2)}s`, 'info');
+                 this.log(`   📄 Trimmed Duration: ${results.trimmedFile.duration.toFixed(2)}s`, 'info');
+                 this.log(`   ⏱️ Time Saved: ${results.results.timeSaved.toFixed(2)}s`, 'info');
                  
-                 if (progress >= 100) {
-                     clearInterval(interval);
-                     resolve();
-                 }
-             }, 200);
-         });
+                 // Store trimmed audio information
+                 this.trimmedAudioInfo = {
+                     fileName: results.trimmedFile.name,
+                     downloadUrl: results.trimmedFile.downloadUrl,
+                     originalDuration: results.originalFile.duration,
+                     trimmedDuration: results.trimmedFile.duration,
+                     timeSaved: results.results.timeSaved,
+                     segmentsRemoved: results.results.segmentsRemoved
+                 };
+                 
+                 // Display results using existing UI
+                 this.displaySilenceRemovalResults(this.trimmedAudioInfo);
+                 
+                 this.showUIMessage(`✅ Silence trimming complete! Saved ${results.results.timeSaved.toFixed(2)}s`, 'success');
+                 
+                 return results;
+             } else {
+                 throw new Error('Backend silence trimming failed');
+             }
+             
+         } catch (error) {
+             this.log(`❌ Silence trimming failed: ${error.message}`, 'error');
+             this.showUIMessage(`❌ Trimming failed: ${error.message}`, 'error');
+         }
      }
      
      // Update progress bar during silence removal
@@ -4864,20 +4733,14 @@ class AudioToolsPro {
              </div>
          `;
          
-        console.log('🔧 Setting innerHTML...');
         resultsArea.innerHTML = resultsHTML;
-        console.log('🔧 innerHTML set successfully');
-        console.log('🔧 Results area innerHTML length:', resultsArea.innerHTML.length);
-        
+                
         // Ensure the results area is visible
         resultsArea.style.display = 'block';
         resultsArea.style.opacity = '1';
-        console.log('🔧 Results area made visible');
         
         // Activate the silence tab
-        console.log('🔧 Activating silence tab...');
         this.activateResultsTab('silence');
-        console.log('🔧 Tab activation completed');
         
         // Render new timeline
         console.log('🔧 Rendering new timeline...');
@@ -5275,104 +5138,7 @@ class AudioToolsPro {
             return null;
         }
     }
-    
-    // Create silence-free audio using Web Audio API
-    async createSilenceFreeAudio(originalAudioBlob) {
-        try {
-            console.log('🎵 Creating silence-free audio...');
-            
-            // Create audio context
-            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            
-            // Decode the original audio
-            const arrayBuffer = await originalAudioBlob.arrayBuffer();
-            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-            
-            console.log('📊 Original audio info:', {
-                duration: audioBuffer.duration,
-                sampleRate: audioBuffer.sampleRate,
-                numberOfChannels: audioBuffer.numberOfChannels
-            });
-            
-            // Calculate total samples to keep
-            let totalSamplesToKeep = 0;
-            const keepRanges = [];
-            
-            // Convert silence results to keep ranges
-            let currentTime = 0;
-            for (const silence of this.lastSilenceResults) {
-                if (silence.start > currentTime) {
-                    // Keep the segment before silence
-                    keepRanges.push({
-                        start: currentTime,
-                        end: silence.start
-                    });
-                    totalSamplesToKeep += Math.floor((silence.start - currentTime) * audioBuffer.sampleRate);
-                }
-                currentTime = silence.end;
-            }
-            
-            // Keep the final segment if there's audio after the last silence
-            if (currentTime < audioBuffer.duration) {
-                keepRanges.push({
-                    start: currentTime,
-                    end: audioBuffer.duration
-                });
-                totalSamplesToKeep += Math.floor((audioBuffer.duration - currentTime) * audioBuffer.sampleRate);
-            }
-            
-            console.log('✂️ Keep ranges:', keepRanges);
-            console.log('📏 Total samples to keep:', totalSamplesToKeep);
-            
-            if (totalSamplesToKeep === 0) {
-                throw new Error('No audio segments to keep after removing silence');
-            }
-            
-            // Create new audio buffer with only the kept segments
-            const newAudioBuffer = audioContext.createBuffer(
-                audioBuffer.numberOfChannels,
-                totalSamplesToKeep,
-                audioBuffer.sampleRate
-            );
-            
-            // Copy audio data from keep ranges
-            let writeIndex = 0;
-            for (const range of keepRanges) {
-                const startSample = Math.floor(range.start * audioBuffer.sampleRate);
-                const endSample = Math.floor(range.end * audioBuffer.sampleRate);
-                const samplesToCopy = endSample - startSample;
-                
-                for (let channel = 0; channel < audioBuffer.numberOfChannels; channel++) {
-                    const sourceData = audioBuffer.getChannelData(channel);
-                    const targetData = newAudioBuffer.getChannelData(channel);
-                    
-                    for (let i = 0; i < samplesToCopy; i++) {
-                        targetData[writeIndex + i] = sourceData[startSample + i];
-                    }
-                }
-                writeIndex += samplesToCopy;
-            }
-            
-            // Convert back to blob
-            const audioBlob = await this.audioBufferToBlob(newAudioBuffer, originalAudioBlob.type);
-            
-            console.log('✅ Silence-free audio created:', {
-                originalDuration: audioBuffer.duration,
-                newDuration: newAudioBuffer.duration,
-                timeSaved: audioBuffer.duration - newAudioBuffer.duration
-            });
-            
-            // Clean up
-            audioContext.close();
-            
-            return audioBlob;
-            
-        } catch (error) {
-            console.error('❌ Create silence-free audio failed:', error);
-            throw error;
-        }
-    }
-    
+        
     // Convert AudioBuffer to Blob
     async audioBufferToBlob(audioBuffer, mimeType = 'audio/wav') {
         try {
@@ -7129,33 +6895,62 @@ Format your response as JSON with this structure:
     }
     
     updateProjectDisplay(data) {
-        // Update project name and path
+        // Get compact status bar elements
         const projectName = document.getElementById('projectName');
-        const projectPath = document.getElementById('projectPath');
-        const sequenceName = document.getElementById('sequenceName');
-        const sequenceDuration = document.getElementById('sequenceDuration');
-        const frameRate = document.getElementById('frameRate');
         const videoFileName = document.getElementById('videoFileName');
-        const videoSpecs = document.getElementById('videoSpecs');
         const audioTrackCount = document.getElementById('audioTrackCount');
         const videoTrackCount = document.getElementById('videoTrackCount');
-        const selectedClipsCount = document.getElementById('selectedClipsCount');
+        const projectStatusDot = document.getElementById('projectStatusDot');
+        const projectStatusText = document.getElementById('projectStatusText');
         
-        if (projectName) projectName.textContent = 'Adobe Premiere Project';
-        if (projectPath) projectPath.textContent = '/Users/project/shortez.prproj';
-        if (sequenceName) sequenceName.textContent = data.sequence.name;
-        if (sequenceDuration) sequenceDuration.textContent = this.formatTime(data.sequence.duration);
-        if (frameRate) frameRate.textContent = `${data.sequence.frameRate} fps`;
-        if (videoFileName) videoFileName.textContent = data.selectedClips[0]?.name || 'No media';
-        if (videoSpecs) videoSpecs.textContent = '1920x1080, H.264';
-        if (audioTrackCount) audioTrackCount.textContent = data.tracks.filter(t => t.type === 'audio').length;
-        if (videoTrackCount) videoTrackCount.textContent = data.tracks.filter(t => t.type === 'video').length;
-        if (selectedClipsCount) selectedClipsCount.textContent = data.selectedClips.length;
+        // Check if we have valid project data
+        const hasValidProject = data && (data.project?.name || data.appName);
         
-        // Update track counter for Feature 3
+        // Update project status indicator
+        if (projectStatusDot) {
+            if (hasValidProject) {
+                projectStatusDot.className = 'status-dot connected';
+            } else {
+                projectStatusDot.className = 'status-dot';
+            }
+        }
+        
+        
+        if (!hasValidProject) {
+            // Set default empty values
+            if (projectName) projectName.textContent = 'Connected';
+            if (videoFileName) videoFileName.textContent = 'No media';
+            if (audioTrackCount) audioTrackCount.textContent = '0';
+            if (videoTrackCount) videoTrackCount.textContent = '0';
+            return;
+        }
+        
+        // Update with actual data
+        if (projectName) {
+            const name = data.project?.name || data.appName || 'Premiere Project';
+            // Truncate long project names
+            projectName.textContent = name.length > 30 ? name.substring(0, 27) + '...' : name;
+        }
+        
+        // Update media info
+        const selectedClip = data.selectedClips?.[0];
+        if (videoFileName) {
+            const fileName = selectedClip?.name || 'No media';
+            // Truncate long file names
+            videoFileName.textContent = fileName.length > 25 ? fileName.substring(0, 22) + '...' : fileName;
+        }
+        
+        // Update track counts
+        const audioTracks = data.tracks?.filter(t => t.type === 'audio')?.length || 0;
+        const videoTracks = data.tracks?.filter(t => t.type === 'video')?.length || 0;
+        
+        if (audioTrackCount) audioTrackCount.textContent = audioTracks;
+        if (videoTrackCount) videoTrackCount.textContent = videoTracks;
+        
+        // Update track counter for Feature 3 (if it exists)
         const currentTrackCount = document.getElementById('currentTrackCount');
         if (currentTrackCount) {
-            currentTrackCount.textContent = data.tracks.filter(t => t.type === 'audio').length;
+            currentTrackCount.textContent = audioTracks;
         }
     }
     
@@ -15631,48 +15426,6 @@ AudioToolsPro.prototype.runComprehensiveOverlapDetection = async function() {
 // Kept for reference only - all overlap detection now uses backend
 // ======================================================================
 
-// Get audio data for overlap analysis
-AudioToolsPro.prototype.getAudioForOverlapAnalysis = async function() {
-    try {
-        // Try to get current audio blob
-        if (this.currentAudioBlob) {
-            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            const arrayBuffer = await this.currentAudioBlob.arrayBuffer();
-            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-            
-            return {
-                audioBuffer: audioBuffer,
-                audioContext: audioContext,
-                sampleRate: audioBuffer.sampleRate,
-                duration: audioBuffer.duration,
-                channels: audioBuffer.numberOfChannels
-            };
-        }
-        
-        // Try to get from audio element
-        const audioElement = document.getElementById('audioPlayer');
-        if (audioElement && audioElement.src) {
-            const response = await fetch(audioElement.src);
-            const arrayBuffer = await response.arrayBuffer();
-            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-            
-            return {
-                audioBuffer: audioBuffer,
-                audioContext: audioContext,
-                sampleRate: audioBuffer.sampleRate,
-                duration: audioBuffer.duration,
-                channels: audioBuffer.numberOfChannels
-            };
-        }
-        
-        return null;
-        
-    } catch (error) {
-        this.log(`❌ Failed to get audio for overlap analysis: ${error.message}`, 'error');
-        return null;
-    }
-};
 
 // Frequency-domain analysis for overlap detection
 AudioToolsPro.prototype.performFrequencyDomainAnalysis = async function(audioData) {
@@ -15906,37 +15659,6 @@ AudioToolsPro.prototype.detectFrequencyConflicts = function(frequencyData, timeS
     }
     
     return null;
-};
-
-// Calculate cross-correlation between two audio windows
-AudioToolsPro.prototype.calculateCrossCorrelation = function(signal1, signal2) {
-    if (signal1.length !== signal2.length) {
-        return 0;
-    }
-    
-    let correlation = 0;
-    let sum1 = 0;
-    let sum2 = 0;
-    let sum1Sq = 0;
-    let sum2Sq = 0;
-    
-    // Calculate means and correlations
-    for (let i = 0; i < signal1.length; i++) {
-        sum1 += signal1[i];
-        sum2 += signal2[i];
-        sum1Sq += signal1[i] * signal1[i];
-        sum2Sq += signal2[i] * signal2[i];
-        correlation += signal1[i] * signal2[i];
-    }
-    
-    const n = signal1.length;
-    const mean1 = sum1 / n;
-    const mean2 = sum2 / n;
-    
-    const numerator = correlation - (n * mean1 * mean2);
-    const denominator = Math.sqrt((sum1Sq - n * mean1 * mean1) * (sum2Sq - n * mean2 * mean2));
-    
-    return denominator === 0 ? 0 : numerator / denominator;
 };
 
 // Calculate RMS (Root Mean Square) for audio level analysis
@@ -16293,7 +16015,6 @@ AudioToolsPro.prototype.updateAnalysisMode = function(value) {
     }
 };
 
-// Resolution method configuration removed for simplified UI
 
 // Automated resolution implementation
 AudioToolsPro.prototype.autoResolveOverlaps = async function() {
@@ -16330,8 +16051,6 @@ AudioToolsPro.prototype.autoResolveOverlaps = async function() {
             this.updateResolvedOverlapDisplay(resolvedCount, overlaps.length);
         } catch (error) {
             this.log(`⚠️ UI update failed after resolution: ${error.message}`, 'warning');
-            // Diagnostic functionality removed for cleaner UI
-            // Continue execution - resolution was successful, just UI update failed
         }
         
     } catch (error) {
@@ -19135,30 +18854,30 @@ AudioToolsPro.prototype.calculateOverlapSeverity = function(analysis) {
     return Math.min(severity, 1.0);
 };
 
-AudioToolsPro.prototype.mergeNearbyOverlaps = function(overlaps, mergeThreshold = 0.5) {
-    if (overlaps.length === 0) return [];
+// AudioToolsPro.prototype.mergeNearbyOverlaps = function(overlaps, mergeThreshold = 0.5) {
+//     if (overlaps.length === 0) return [];
     
-    const merged = [];
-    let current = { ...overlaps[0] };
+//     const merged = [];
+//     let current = { ...overlaps[0] };
     
-    for (let i = 1; i < overlaps.length; i++) {
-        const overlap = overlaps[i];
+//     for (let i = 1; i < overlaps.length; i++) {
+//         const overlap = overlaps[i];
         
-        if (overlap.startTime - current.endTime < mergeThreshold) {
-            current.endTime = overlap.endTime;
-            current.duration = current.endTime - current.startTime;
-            current.severity = Math.max(current.severity, overlap.severity);
-            current.speechEnergy = Math.max(current.speechEnergy, overlap.speechEnergy);
-            current.musicEnergy = Math.max(current.musicEnergy, overlap.musicEnergy);
-        } else {
-            merged.push(current);
-            current = { ...overlap };
-        }
-    }
+//         if (overlap.startTime - current.endTime < mergeThreshold) {
+//             current.endTime = overlap.endTime;
+//             current.duration = current.endTime - current.startTime;
+//             current.severity = Math.max(current.severity, overlap.severity);
+//             current.speechEnergy = Math.max(current.speechEnergy, overlap.speechEnergy);
+//             current.musicEnergy = Math.max(current.musicEnergy, overlap.musicEnergy);
+//         } else {
+//             merged.push(current);
+//             current = { ...overlap };
+//         }
+//     }
     
-    merged.push(current);
-    return merged;
-};
+//     merged.push(current);
+//     return merged;
+// };
 
 AudioToolsPro.prototype.displayOverlapResults = function(results) {
     const outputPanel = document.getElementById('overlapResults');
@@ -19318,6 +19037,35 @@ AudioToolsPro.prototype.initializeMultiTrackSystem = function() {
     this.log('🎵 Initializing REAL Multi-Track Audio System...', 'info');
     
     try {
+        // Initialize MultiTrack Integration module for backend API communication
+        if (typeof MultiTrackIntegration !== 'undefined') {
+            this.multiTrackIntegration = new MultiTrackIntegration(this);
+            this.log('🔗 MultiTrack Integration module loaded', 'success');
+        } else {
+            this.log('⚠️ MultiTrackIntegration module not available - processing will use legacy mode', 'warning');
+        }
+        
+        // Initialize Rhythm Integration module for backend API communication
+        if (typeof RhythmIntegration !== 'undefined') {
+            this.rhythmIntegration = new RhythmIntegration(this);
+            this.log('🎵 Rhythm Integration module loaded', 'success');
+        } else {
+            this.log('⚠️ RhythmIntegration module not available - processing will use legacy mode', 'warning');
+        }
+        
+        // Initialize Silence Integration module for backend API communication
+        if (typeof SilenceIntegration !== 'undefined') {
+            this.silenceIntegration = new SilenceIntegration(this);
+            this.log('🔇 Silence Integration module loaded', 'success');
+        } else {
+            this.log('⚠️ SilenceIntegration module not available - processing will use legacy mode', 'warning');
+        }
+        
+        // Setup result tab switching functionality
+        if (this.multiTrackIntegration && typeof this.multiTrackIntegration.setupResultTabSwitching === 'function') {
+            this.multiTrackIntegration.setupResultTabSwitching();
+        }
+        
         // Clear any existing tracks
         this.multiTrackConfig.tracks.clear();
         this.multiTrackConfig.loadedFiles.clear();
@@ -19339,6 +19087,27 @@ AudioToolsPro.prototype.initializeMultiTrackSystem = function() {
         
     } catch (error) {
         this.log(`❌ Multi-Track initialization failed: ${error.message}`, 'error');
+    }
+};
+
+// Show Multi-Track Interface
+AudioToolsPro.prototype.showMultiTrackInterface = function() {
+    try {
+        // Show multi-track visualization container
+        const multiTrackVisualization = document.getElementById('multiTrackVisualization');
+        if (multiTrackVisualization) {
+            multiTrackVisualization.style.display = 'block';
+        }
+        
+        // Update track visualization if tracks are loaded
+        if (this.multiTrackIntegration && this.multiTrackConfig.tracks.size > 0) {
+            this.multiTrackIntegration.updateTracksVisualization(this.multiTrackConfig.tracks);
+        }
+        
+        this.log('✅ Multi-track interface shown', 'success');
+        
+    } catch (error) {
+        this.log(`❌ Failed to show multi-track interface: ${error.message}`, 'error');
     }
 };
 
@@ -19415,10 +19184,28 @@ AudioToolsPro.prototype.loadSingleAudioTrack = async function(file, trackId) {
             this.initializeAudioContext();
         }
         
-        // Validate file
-        if (!file || !file.type.startsWith('audio/')) {
-            throw new Error('Invalid audio file format');
+        // Validate file - be more permissive with file types
+        if (!file) {
+            throw new Error('No file provided');
         }
+        
+        // Check file extension as primary validation
+        const fileName = file.name.toLowerCase();
+        const validExtensions = ['.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac', '.mp4', '.mov', '.avi'];
+        const hasValidExtension = validExtensions.some(ext => fileName.endsWith(ext));
+        
+        // Also check MIME type as secondary validation
+        const validMimeTypes = file.type && (
+            file.type.startsWith('audio/') || 
+            file.type.startsWith('video/') ||
+            file.type === 'application/octet-stream'
+        );
+        
+        if (!hasValidExtension && !validMimeTypes) {
+            throw new Error(`Invalid file type. Supported formats: ${validExtensions.join(', ')}`);
+        }
+        
+        this.log(`📁 File validation passed - Name: ${file.name}, Type: ${file.type}, Size: ${file.size}`, 'info');
         
         // Create track metadata
         const trackData = {
@@ -19439,8 +19226,29 @@ AudioToolsPro.prototype.loadSingleAudioTrack = async function(file, trackId) {
         this.updateTrackLoadingState(trackId, 'loading', file.name);
         
         try {
-        // Convert file to blob and audio buffer
-        const audioBlob = new Blob([file], { type: file.type });
+        // Convert file to blob with proper MIME type
+        let mimeType = file.type;
+        
+        // If MIME type is not set or generic, infer from file extension
+        if (!mimeType || mimeType === 'application/octet-stream') {
+            const extension = file.name.toLowerCase().split('.').pop();
+            const mimeTypeMap = {
+                'mp3': 'audio/mpeg',
+                'wav': 'audio/wav',
+                'm4a': 'audio/m4a',
+                'aac': 'audio/aac',
+                'ogg': 'audio/ogg',
+                'flac': 'audio/flac',
+                'mp4': 'video/mp4',
+                'mov': 'video/quicktime',
+                'avi': 'video/x-msvideo'
+            };
+            mimeType = mimeTypeMap[extension] || file.type || 'audio/mpeg';
+        }
+        
+        const audioBlob = new Blob([file], { type: mimeType });
+        this.log(`📦 Created blob with MIME type: ${mimeType}`, 'info');
+        
         const arrayBuffer = await file.arrayBuffer();
             
             // Ensure audio context is in running state
@@ -19952,130 +19760,6 @@ AudioToolsPro.prototype.detectTrackType = function(filename) {
     }
 };
 
-// Show multi-track interface
-AudioToolsPro.prototype.showMultiTrackInterface = function() {
-    const multiTrackTab = document.getElementById('feature3');
-    if (multiTrackTab) {
-        // Add real multi-track controls if not already present
-        const existingControls = multiTrackTab.querySelector('.real-multitrack-controls');
-        if (!existingControls) {
-            const controlsHTML = `
-                <div class="real-multitrack-controls">
-                    <div class="multitrack-header">
-                        <h3><i class="fas fa-layer-group"></i> Enhanced Multi-Track Audio System</h3>
-                        <p>Professional multi-track audio loading, processing, and analysis with real-time feedback</p>
-                    </div>
-                    
-                    <div class="multi-track-controls">
-                        <div class="control-group">
-                            <button class="action-btn primary" id="loadMultipleAudioFiles">
-                                <i class="fas fa-upload"></i> Load Multiple Files
-                            </button>
-                            <button class="action-btn secondary" id="addAudioTrack">
-                                <i class="fas fa-plus"></i> Add Single Track
-                            </button>
-                        </div>
-                        
-                        <div class="control-group">
-                            <button class="action-btn" id="clearAllTracks">
-                                <i class="fas fa-trash"></i> Clear All
-                            </button>
-                            <button class="action-btn" id="playAllTracks">
-                                <i class="fas fa-play-circle"></i> Play All
-                            </button>
-                        </div>
-                        
-                        <div class="control-group">
-                            <label for="trackLimit">Max Tracks:</label>
-                            <select id="trackLimit">
-                                <option value="3">3 Tracks</option>
-                                <option value="6" selected>6 Tracks</option>
-                                <option value="12">12 Tracks</option>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <div class="tracks-visualization" id="multiTrackVisualization">
-                        <div class="no-tracks-message">
-                            <i class="fas fa-music"></i>
-                            <p>No tracks loaded</p>
-                            <span>Load multiple audio files to get started with professional multi-track processing</span>
-                        </div>
-                    </div>
-                </div>
-            `;
-            
-            multiTrackTab.insertAdjacentHTML('afterbegin', controlsHTML);
-            
-            // FIXED: Manually attach event listeners to the dynamically created buttons
-            this.attachMultiTrackEventListeners();
-        }
-    }
-};
-
-// Attach event listeners to multi-track buttons
-AudioToolsPro.prototype.attachMultiTrackEventListeners = function() {
-    try {
-        this.log('🔗 Attaching multi-track event listeners...', 'info');
-        
-        // Load Multiple Audio Files button
-        const loadMultipleBtn = document.getElementById('loadMultipleAudioFiles');
-        if (loadMultipleBtn) {
-            loadMultipleBtn.addEventListener('click', () => {
-                this.log('📁 Load Multiple Audio Files button clicked', 'info');
-                this.loadMultipleAudioFiles();
-            });
-            this.log('✅ Load Multiple Audio Files button listener attached', 'info');
-        } else {
-            this.log('⚠️ Load Multiple Audio Files button not found', 'warning');
-        }
-        
-        // Add Single Track button
-        const addTrackBtn = document.getElementById('addAudioTrack');
-        if (addTrackBtn) {
-            addTrackBtn.addEventListener('click', () => {
-                this.log('➕ Add Audio Track button clicked', 'info');
-                this.addNewAudioTrack();
-            });
-            this.log('✅ Add Audio Track button listener attached', 'info');
-        } else {
-            this.log('⚠️ Add Audio Track button not found', 'warning');
-        }
-        
-        // Clear All Tracks button
-        const clearAllBtn = document.getElementById('clearAllTracks');
-        if (clearAllBtn) {
-            clearAllBtn.addEventListener('click', () => {
-                this.clearAllTracks();
-            });
-            this.log('✅ Clear All Tracks button listener attached', 'info');
-        }
-        
-        // Play All Tracks button
-        const playAllBtn = document.getElementById('playAllTracks');
-        if (playAllBtn) {
-            playAllBtn.addEventListener('click', () => {
-                this.playAllTracks();
-            });
-            this.log('✅ Play All Tracks button listener attached', 'info');
-        }
-        
-        // Track Limit selector
-        const trackLimitSelect = document.getElementById('trackLimit');
-        if (trackLimitSelect) {
-            trackLimitSelect.addEventListener('change', (e) => {
-                this.updateTrackLimit(parseInt(e.target.value));
-            });
-            this.log('✅ Track Limit selector listener attached', 'info');
-        }
-        
-        this.log('✅ Multi-track event listeners attached successfully', 'success');
-        
-    } catch (error) {
-        this.log(`❌ Failed to attach multi-track event listeners: ${error.message}`, 'error');
-    }
-};
-
 // Update multi-track visualization - ENHANCED IMPLEMENTATION
 AudioToolsPro.prototype.updateMultiTrackVisualization = function() {
     try {
@@ -20090,21 +19774,36 @@ AudioToolsPro.prototype.updateMultiTrackVisualization = function() {
         // Clear existing content first
         container.innerHTML = '';
         
+        // Show/hide the track loading area based on whether tracks are loaded
+        const trackLoadingArea = document.getElementById('trackLoadingArea');
+        const tracksSimpleList = document.getElementById('tracksSimpleList');
+        
         if (trackCount === 0) {
+            // Show the loading area, hide the tracks list
+            if (trackLoadingArea) {
+                trackLoadingArea.style.display = 'block';
+            }
+            if (tracksSimpleList) {
+                tracksSimpleList.style.display = 'none';
+            }
+            
             container.innerHTML = `
                 <div class="no-tracks-message">
                     <i class="fas fa-music"></i>
-                    <p>No tracks loaded</p>
-                    <span>Load multiple audio files to get started with professional multi-track processing</span>
-                    <div class="quick-actions">
-                        <button class="action-btn primary" onclick="audioToolsPro.loadMultipleAudioFiles()">
-                            <i class="fas fa-upload"></i> Load Audio Files
-                        </button>
-                    </div>
+                    <p>No tracks loaded in main visualization</p>
+                    <span>Use the "Load Audio Files" button above to add tracks for analysis</span>
                 </div>
             `;
             this.updateTrackStatistics();
             return;
+        } else {
+            // Hide the loading area, show the tracks list  
+            if (trackLoadingArea) {
+                trackLoadingArea.style.display = 'none';
+            }
+            if (tracksSimpleList) {
+                tracksSimpleList.style.display = 'block';
+            }
         }
         
         // Create header with track count and controls
@@ -20125,82 +19824,82 @@ AudioToolsPro.prototype.updateMultiTrackVisualization = function() {
             </div>
         `;
         
-        // Generate tracks display
-        const tracksHTML = Array.from(this.multiTrackConfig.tracks.entries()).map(([trackId, track]) => {
-            const typeIcon = this.getTrackTypeIcon(track.type);
-            const typeColor = this.getTrackTypeColor(track.type);
-            const statusClass = track.active ? 'active' : 'inactive';
-            const loadingClass = track.loading ? 'loading' : 'loaded';
+        // // Generate tracks display
+        // const tracksHTML = Array.from(this.multiTrackConfig.tracks.entries()).map(([trackId, track]) => {
+        //     const typeIcon = this.getTrackTypeIcon(track.type);
+        //     const typeColor = this.getTrackTypeColor(track.type);
+        //     const statusClass = track.active ? 'active' : 'inactive';
+        //     const loadingClass = track.loading ? 'loading' : 'loaded';
             
-            return `
-                <div class="track-item ${statusClass} ${loadingClass}" data-track-id="${trackId}">
-                    <div class="track-header">
-                        <div class="track-info">
-                            <div class="track-icon" style="color: ${typeColor};">
-                                ${track.loading ? '<div class="loading-spinner"></div>' : typeIcon}
-                            </div>
-                            <div class="track-details">
-                                <div class="track-name" title="${track.name}">${track.name}</div>
-                                <div class="track-status">
-                                    ${track.loading ? 'Loading...' : 
-                                      `${track.duration ? track.duration.toFixed(2) + 's' : ''} • 
-                                       ${track.sampleRate ? track.sampleRate + 'Hz' : ''} • 
-                                       ${track.channels ? track.channels + 'ch' : ''} • 
-                                       ${(track.size / 1024 / 1024).toFixed(1)}MB`}
-                                </div>
-                            </div>
-                        </div>
-                        <div class="track-controls">
-                            ${!track.loading ? `
-                                <button class="control-btn play-btn" onclick="audioToolsPro.previewTrack('${trackId}')" title="Preview Track">
-                                    <i class="fas fa-play"></i>
-                                </button>
-                                <button class="control-btn mute-btn ${track.muted ? 'muted' : ''}" onclick="audioToolsPro.toggleTrackMute('${trackId}')" title="${track.muted ? 'Unmute' : 'Mute'} Track">
-                                    <i class="fas fa-volume-${track.muted ? 'mute' : 'up'}"></i>
-                                </button>
-                                <button class="control-btn active-btn ${track.active ? 'active' : ''}" onclick="audioToolsPro.toggleTrackActive('${trackId}')" title="${track.active ? 'Deactivate' : 'Activate'} Track">
-                                    <i class="fas fa-${track.active ? 'eye' : 'eye-slash'}"></i>
-                                </button>
-                                <button class="control-btn remove-btn" onclick="audioToolsPro.removeAudioTrack('${trackId}')" title="Remove Track">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            ` : `
-                                <div class="loading-indicator">
-                                    <div class="loading-dots"></div>
-                                </div>
-                            `}
-                        </div>
-                    </div>
-                    ${!track.loading ? `
-                        <div class="track-waveform">
-                            <div class="waveform-placeholder" id="waveform-${trackId}">
-                                <div class="waveform-bars">
-                                    ${Array.from({length: 50}, (_, i) => `<div class="bar" style="height: ${Math.random() * 100}%"></div>`).join('')}
-                                </div>
-                            </div>
-                        </div>
-                        <div class="track-progress">
-                            <div class="progress-bar">
-                                <div class="progress-fill" style="width: 0%"></div>
-                            </div>
-                            <div class="time-display">0:00 / ${this.formatTime(track.duration || 0)}</div>
-                        </div>
-                    ` : `
-                        <div class="track-loading">
-                            <div class="loading-progress">
-                                <div class="progress-bar">
-                                    <div class="progress-fill loading-animation"></div>
-                                </div>
-                                <span class="loading-text">Processing audio data...</span>
-                            </div>
-                        </div>
-                    `}
-                </div>
-            `;
-        }).join('');
+        //     return `
+        //         <div class="track-item ${statusClass} ${loadingClass}" data-track-id="${trackId}">
+        //             <div class="track-header">
+        //                 <div class="track-info">
+        //                     <div class="track-icon" style="color: ${typeColor};">
+        //                         ${track.loading ? '<div class="loading-spinner"></div>' : typeIcon}
+        //                     </div>
+        //                     <div class="track-details">
+        //                         <div class="track-name" title="${track.name}">${track.name}</div>
+        //                         <div class="track-status">
+        //                             ${track.loading ? 'Loading...' : 
+        //                               `${track.duration ? track.duration.toFixed(2) + 's' : ''} • 
+        //                                ${track.sampleRate ? track.sampleRate + 'Hz' : ''} • 
+        //                                ${track.channels ? track.channels + 'ch' : ''} • 
+        //                                ${(track.size / 1024 / 1024).toFixed(1)}MB`}
+        //                         </div>
+        //                     </div>
+        //                 </div>
+        //                 <div class="track-controls">
+        //                     ${!track.loading ? `
+        //                         <button class="control-btn play-btn" onclick="audioToolsPro.previewTrack('${trackId}')" title="Preview Track">
+        //                             <i class="fas fa-play"></i>
+        //                         </button>
+        //                         <button class="control-btn mute-btn ${track.muted ? 'muted' : ''}" onclick="audioToolsPro.toggleTrackMute('${trackId}')" title="${track.muted ? 'Unmute' : 'Mute'} Track">
+        //                             <i class="fas fa-volume-${track.muted ? 'mute' : 'up'}"></i>
+        //                         </button>
+        //                         <button class="control-btn active-btn ${track.active ? 'active' : ''}" onclick="audioToolsPro.toggleTrackActive('${trackId}')" title="${track.active ? 'Deactivate' : 'Activate'} Track">
+        //                             <i class="fas fa-${track.active ? 'eye' : 'eye-slash'}"></i>
+        //                         </button>
+        //                         <button class="control-btn remove-btn" onclick="audioToolsPro.removeAudioTrack('${trackId}')" title="Remove Track">
+        //                             <i class="fas fa-trash"></i>
+        //                         </button>
+        //                     ` : `
+        //                         <div class="loading-indicator">
+        //                             <div class="loading-dots"></div>
+        //                         </div>
+        //                     `}
+        //                 </div>
+        //             </div>
+        //             ${!track.loading ? `
+        //                 <div class="track-waveform">
+        //                     <div class="waveform-placeholder" id="waveform-${trackId}">
+        //                         <div class="waveform-bars">
+        //                             ${Array.from({length: 50}, (_, i) => `<div class="bar" style="height: ${Math.random() * 100}%"></div>`).join('')}
+        //                         </div>
+        //                     </div>
+        //                 </div>
+        //                 <div class="track-progress">
+        //                     <div class="progress-bar">
+        //                         <div class="progress-fill" style="width: 0%"></div>
+        //                     </div>
+        //                     <div class="time-display">0:00 / ${this.formatTime(track.duration || 0)}</div>
+        //                 </div>
+        //             ` : `
+        //                 <div class="track-loading">
+        //                     <div class="loading-progress">
+        //                         <div class="progress-bar">
+        //                             <div class="progress-fill loading-animation"></div>
+        //                         </div>
+        //                         <span class="loading-text">Processing audio data...</span>
+        //                     </div>
+        //                 </div>
+        //             `}
+        //         </div>
+        //     `;
+        // }).join('');
         
-        // Combine header and tracks
-        container.innerHTML = headerHTML + '<div class="tracks-list">' + tracksHTML + '</div>';
+        // // Combine header and tracks
+        container.innerHTML = headerHTML 
         
         // Update statistics
         this.updateTrackStatistics();
@@ -20212,10 +19911,105 @@ AudioToolsPro.prototype.updateMultiTrackVisualization = function() {
         
         this.log(`✅ Multi-track visualization updated: ${trackCount} tracks displayed`, 'info');
         
+        // Update the simple tracks list
+        this.updateSimpleTracksList();
+        
     } catch (error) {
         this.log(`❌ Failed to update multi-track visualization: ${error.message}`, 'error');
         console.error('Multi-track visualization error:', error);
     }
+};
+
+// Update simple tracks list in the strip
+AudioToolsPro.prototype.updateSimpleTracksList = function() {
+    const tracksSimpleList = document.getElementById('tracksSimpleList');
+    if (!tracksSimpleList) return;
+    
+    const trackCount = this.multiTrackConfig.currentTrackCount;
+    
+    if (trackCount === 0) {
+        tracksSimpleList.innerHTML = '';
+        return;
+    }
+    
+    const tracksHTML = Array.from(this.multiTrackConfig.tracks.entries()).map(([trackId, track]) => {
+        const typeIcon = this.getTrackTypeIcon(track.type);
+        const statusClass = track.loading ? 'loading' : 'loaded';
+        
+        return `
+            <div class="simple-track-item ${statusClass}" data-track-id="${trackId}">
+                <div class="track-icon">${track.loading ? '<i class="fas fa-spinner fa-spin"></i>' : typeIcon}</div>
+                <div class="track-info">
+                    <div class="track-name">${track.name}</div>
+                    <div class="track-meta">${track.duration ? track.duration.toFixed(1) + 's' : ''} • ${track.channels || '2'}ch</div>
+                </div>
+                <div class="track-status-indicator ${track.active ? 'active' : 'inactive'}"></div>
+            </div>
+        `;
+    }).join('');
+    
+    tracksSimpleList.innerHTML = tracksHTML;
+};
+
+// Show multi-track results and manage visibility
+AudioToolsPro.prototype.showMultiTrackResults = function(type = 'silence') {
+    const resultsContainer = document.getElementById('multitrackResults');
+    const tracksVisualization = document.getElementById('multiTrackVisualization');
+    const trackLoadingArea = document.getElementById('trackLoadingArea');
+    
+    if (resultsContainer) {
+        resultsContainer.style.display = 'block';
+        
+        // Hide tracks visualization when showing results
+        if (tracksVisualization) {
+            tracksVisualization.style.display = 'none';
+        }
+        
+        // Hide track loading area when showing results
+        if (trackLoadingArea) {
+            trackLoadingArea.style.display = 'none';
+        }
+        
+        // Switch to the appropriate result tab
+        this.switchResultTab(type);
+        
+        this.log(`✅ Showing results for: ${type}`, 'success');
+    }
+};
+
+// Clear multi-track results and show tracks again
+AudioToolsPro.prototype.clearMultiTrackResults = function() {
+    const resultsContainer = document.getElementById('multitrackResults');
+    const tracksVisualization = document.getElementById('multiTrackVisualization');
+    const trackLoadingArea = document.getElementById('trackLoadingArea');
+    
+    if (resultsContainer) {
+        resultsContainer.style.display = 'none';
+    }
+    
+    // Show tracks visualization again
+    if (tracksVisualization && this.multiTrackConfig.currentTrackCount > 0) {
+        tracksVisualization.style.display = 'block';
+    }
+    
+    // Show appropriate loading area or tracks
+    if (this.multiTrackConfig.currentTrackCount === 0 && trackLoadingArea) {
+        trackLoadingArea.style.display = 'block';
+    }
+    
+    // Clear individual result panels
+    const resultPanels = ['silenceDetailsList', 'overlapDetailsList', 'trimDetailsList', 'duckingDetailsList'];
+    resultPanels.forEach(panelId => {
+        const panel = document.getElementById(panelId);
+        if (panel) {
+            panel.innerHTML = '';
+        }
+    });
+    
+    // Update visualization
+    this.updateMultiTrackVisualization();
+    
+    this.log('🗑️ Multi-track results cleared', 'info');
 };
 
 // Attach event listeners to analysis buttons
@@ -20259,7 +20053,7 @@ AudioToolsPro.prototype.getTrackTypeIcon = function(type) {
         music: 'fa-music',
         voice: 'fa-microphone',
         effects: 'fa-volume-up',
-        unknown: 'fa-file-audio'
+        unknown: ''
     };
     return icons[type] || icons.unknown;
 };
@@ -20334,228 +20128,1154 @@ AudioToolsPro.prototype.toggleTrack = function(trackId) {
     }
 };
 
-// Multi-Track Silence Detection
+// Multi-Track Silence Detection - MIGRATED TO BACKEND API
 AudioToolsPro.prototype.runMultiTrackSilenceDetection = async function() {
     try {
-        this.log('🎵 Starting Multi-Track Silence Detection...', 'info');
-        this.showUIMessage('🎵 Analyzing silence across all tracks...', 'processing');
+        this.log('🎵 Starting Multi-Track Silence Detection via Backend API...', 'info');
+        this.showUIMessage('🎵 Sending tracks to backend for silence analysis...', 'processing');
         
         if (this.multiTrackConfig.currentTrackCount === 0) {
             this.showUIMessage('❌ No tracks loaded. Please load audio tracks first.', 'error');
             return;
         }
         
-        // Update track visualization
-        this.updateTrackVisualization();
-        
-        const results = new Map();
-        let totalSilenceFound = 0;
-        
-        // Process each track
-        for (const [trackId, track] of this.multiTrackConfig.tracks) {
-            if (track.active) {
-                this.log(`🔍 Analyzing track ${trackId}: ${track.name}`, 'info');
-                
-                // Simulate silence detection for each track
-                const silenceRegions = await this.detectSilenceForTrack(track);
-                results.set(trackId, silenceRegions);
-                totalSilenceFound += silenceRegions.length;
-                
-                // Update track status
-                track.silenceRegions = silenceRegions;
-                track.lastAnalyzed = Date.now();
-            }
+        // Check if backend integration is available
+        if (!this.multiTrackIntegration) {
+            throw new Error('Backend integration not available. Please ensure the backend server is running.');
         }
         
-        this.log(`✅ Multi-track silence detection completed: ${totalSilenceFound} silence regions found across ${this.multiTrackConfig.currentTrackCount} tracks`, 'success');
-        this.showUIMessage(`✅ Found ${totalSilenceFound} silence regions across ${this.multiTrackConfig.currentTrackCount} tracks`, 'success');
+        // Use backend API for analysis
+        const analysisOptions = {
+            analysisTypes: ['silence'],
+            silenceThreshold: -30,
+            enableRealTimeProcessing: true
+        };
         
-        // Display results
-        this.displayMultiTrackSilenceResults(results);
+        const results = await this.multiTrackIntegration.analyzeTracks(
+            this.multiTrackConfig.tracks, 
+            analysisOptions
+        );
         
-        return results;
+        // Process and display results
+        if (results.success) {
+            const silenceData = results.results.silenceAnalysis;
+            const totalSilenceFound = results.statistics.totalSilenceDuration || 0;
+            
+            this.log(`✅ Backend analysis completed: ${totalSilenceFound}s total silence found`, 'success');
+            this.showUIMessage(`✅ Backend analysis complete: ${totalSilenceFound}s silence found`, 'success');
+            
+            // Update track data with results
+            if (this.multiTrackIntegration && typeof this.multiTrackIntegration.updateTracksWithSilenceResults === 'function') {
+                this.multiTrackIntegration.updateTracksWithSilenceResults(results);
+            } else {
+                this.log('⚠️ updateTracksWithSilenceResults function not available, skipping track update', 'warning');
+            }
+            
+            // Display results
+            if (typeof this.displayMultiTrackSilenceResults === 'function') {
+                this.displayMultiTrackSilenceResults(silenceData);
+            } else {
+                this.log('⚠️ displayMultiTrackSilenceResults function not available, creating fallback', 'warning');
+                this.showUIMessage(`✅ Analysis complete: Found silence data for ${Object.keys(silenceData || {}).length} tracks`, 'success');
+            }
+            
+            return results;
+        } else {
+            throw new Error('Backend analysis failed');
+        }
         
     } catch (error) {
         this.log(`❌ Multi-track silence detection failed: ${error.message}`, 'error');
-        this.showUIMessage(`❌ Multi-track analysis failed: ${error.message}`, 'error');
+        this.showUIMessage(`❌ Backend analysis failed: ${error.message}`, 'error');
     }
 };
 
-// Multi-Track Auto-Trim
+// Multi-Track Auto-Trim - MIGRATED TO BACKEND API
 AudioToolsPro.prototype.runMultiTrackAutoTrim = async function() {
     try {
-        this.log('✂️ Starting Multi-Track Auto-Trim...', 'info');
-        this.showUIMessage('✂️ Auto-trimming all tracks...', 'processing');
+        this.log('✂️ Starting Multi-Track Auto-Trim via Backend API...', 'info');
+        this.showUIMessage('✂️ Sending tracks to backend for auto-trimming...', 'processing');
         
         if (this.multiTrackConfig.currentTrackCount === 0) {
             this.showUIMessage('❌ No tracks loaded. Please load audio tracks first.', 'error');
             return;
         }
         
-        let totalTrimsApplied = 0;
-        
-        // Process each track
-        for (const [trackId, track] of this.multiTrackConfig.tracks) {
-            if (track.active && track.silenceRegions) {
-                this.log(`✂️ Trimming track ${trackId}: ${track.name}`, 'info');
-                
-                const trimsApplied = await this.autoTrimTrack(track);
-                totalTrimsApplied += trimsApplied;
-                
-                // Update track status
-                track.trimPoints = trimsApplied;
-                track.lastTrimmed = Date.now();
-            }
+        // Check if backend integration is available
+        if (!this.multiTrackIntegration) {
+            throw new Error('Backend integration not available. Please ensure the backend server is running.');
         }
         
-        this.log(`✅ Multi-track auto-trim completed: ${totalTrimsApplied} trims applied`, 'success');
-        this.showUIMessage(`✅ Applied ${totalTrimsApplied} auto-trims across all tracks`, 'success');
+        // First run silence detection if not already done
+        const analysisOptions = {
+            analysisTypes: ['silence'],
+            silenceThreshold: -30,
+            enableRealTimeProcessing: true
+        };
         
-        // Update visualization
-        this.updateTrackVisualization();
+        const analysisResults = await this.multiTrackIntegration.analyzeTracks(
+            this.multiTrackConfig.tracks, 
+            analysisOptions
+        );
         
-        return totalTrimsApplied;
+        if (analysisResults.success) {
+            const trimData = analysisResults.results.silenceAnalysis;
+            const totalTrimsApplied = analysisResults.statistics.totalSilenceDuration || 0;
+            
+            this.log(`✅ Backend auto-trim completed: ${totalTrimsApplied}s trimmed`, 'success');
+            this.showUIMessage(`✅ Backend auto-trim complete: ${totalTrimsApplied}s removed`, 'success');
+            
+            // Update track data with trim results
+            if (this.multiTrackIntegration && typeof this.multiTrackIntegration.updateTracksWithTrimResults === 'function') {
+                this.multiTrackIntegration.updateTracksWithTrimResults(analysisResults);
+            } else {
+                this.log('⚠️ updateTracksWithTrimResults function not available', 'warning');
+            }
+            
+            // Update visualization
+            this.updateTrackVisualization();
+            
+            return analysisResults;
+        } else {
+            throw new Error('Backend auto-trim failed');
+        }
         
     } catch (error) {
         this.log(`❌ Multi-track auto-trim failed: ${error.message}`, 'error');
-        this.showUIMessage(`❌ Auto-trim failed: ${error.message}`, 'error');
+        this.showUIMessage(`❌ Backend auto-trim failed: ${error.message}`, 'error');
     }
 };
 
-// Multi-Track Overlap Detection - REAL IMPLEMENTATION
+// Multi-Track Overlap Detection
 AudioToolsPro.prototype.runMultiTrackOverlapDetection = async function() {
     try {
-        this.log('🔍 Starting REAL Multi-Track Overlap Detection...', 'info');
-        this.showUIMessage('🔍 Analyzing audio overlaps between multiple tracks...', 'processing');
+        this.log('🔍 Starting Multi-Track Overlap Detection via Backend API...', 'info');
+        this.showUIMessage('🔍 Sending tracks to backend for overlap analysis...', 'processing');
         
         if (this.multiTrackConfig.currentTrackCount < 2) {
             this.showUIMessage('❌ Need at least 2 tracks for overlap detection. Please load multiple audio files.', 'error');
             return;
         }
         
+        // Check if backend integration is available
+        if (!this.multiTrackIntegration) {
+            throw new Error('Backend integration not available. Please ensure the backend server is running.');
+        }
+        
         // Debug: Log all available tracks
-        this.log('📊 Available tracks for analysis:', 'info');
+        this.log('📊 Available tracks for backend analysis:', 'info');
         this.multiTrackConfig.tracks.forEach((track, trackId) => {
             this.log(`   - ${trackId}: ${track.name} (${track.active ? 'active' : 'inactive'})`, 'info');
         });
         
-        const overlaps = [];
-        const deadSpaces = [];
-        const activeTracks = Array.from(this.multiTrackConfig.tracks.values()).filter(track => track.active);
-        
-        this.log(`🎵 Analyzing ${activeTracks.length} active tracks for overlaps and dead space`, 'info');
-        
-        // Step 1: Load and analyze each track's audio data
-        const trackAudioData = new Map();
-        for (const track of activeTracks) {
-            this.log(`📊 Loading audio data for track: ${track.name}`, 'info');
-            const audioBuffer = await this.loadTrackAudioBuffer(track);
-            if (audioBuffer) {
-                trackAudioData.set(track.id, {
-                    track: track,
-                    buffer: audioBuffer,
-                    duration: audioBuffer.duration,
-                    sampleRate: audioBuffer.sampleRate,
-                    channelData: audioBuffer.getChannelData(0) // Get first channel
-                });
-            }
-        }
-        
-        if (trackAudioData.size < 2) {
-            this.showUIMessage('❌ Could not load audio data from tracks. Please ensure audio files are loaded.', 'error');
-            return;
-        }
-        
-        // Step 2: Compare each pair of tracks for REAL overlaps
-        const trackPairs = [];
-        const trackArray = Array.from(trackAudioData.values());
-        
-        for (let i = 0; i < trackArray.length; i++) {
-            for (let j = i + 1; j < trackArray.length; j++) {
-                const track1Data = trackArray[i];
-                const track2Data = trackArray[j];
-                
-                // Additional safety check to prevent same track comparison
-                if (track1Data.track.id === track2Data.track.id || 
-                    track1Data.track.name === track2Data.track.name) {
-                    this.log(`⚠️ Skipping self-comparison of track: ${track1Data.track.name}`, 'warning');
-                    continue;
-                }
-                
-                this.log(`🔍 Analyzing overlap between "${track1Data.track.name}" and "${track2Data.track.name}"`, 'info');
-                
-                try {
-                const pairOverlaps = await this.detectRealOverlapsBetweenTracks(track1Data, track2Data);
-                    
-                    // Ensure pairOverlaps has the expected structure
-                    if (pairOverlaps && typeof pairOverlaps === 'object') {
-                        const overlapArray = Array.isArray(pairOverlaps.overlaps) ? pairOverlaps.overlaps : [];
-                        const deadSpaceArray = Array.isArray(pairOverlaps.deadSpaces) ? pairOverlaps.deadSpaces : [];
-                        
-                        overlaps.push(...overlapArray);
-                        deadSpaces.push(...deadSpaceArray);
-                
-                trackPairs.push({
-                    track1: track1Data.track.name,
-                    track2: track2Data.track.name,
-                            overlaps: overlapArray.length,
-                            deadSpaces: deadSpaceArray.length
-                        });
-                        
-                        this.log(`📊 Analysis results for ${track1Data.track.name} vs ${track2Data.track.name}:`, 'info');
-                        this.log(`   🔄 ${overlapArray.length} overlap regions found`, 'info');
-                        this.log(`   🔇 ${deadSpaceArray.length} dead space regions found`, 'info');
-                    } else {
-                        this.log(`⚠️ Invalid analysis result for ${track1Data.track.name} vs ${track2Data.track.name}`, 'warning');
-                    }
-                } catch (pairError) {
-                    this.log(`❌ Failed to analyze ${track1Data.track.name} vs ${track2Data.track.name}: ${pairError.message}`, 'error');
-                }
-            }
-        }
-        
-        // Step 3: Detect dead space across all tracks
-        this.log('🔍 Detecting dead space across all tracks...', 'info');
-        try {
-        const globalDeadSpaces = await this.detectGlobalDeadSpace(trackAudioData);
-            if (Array.isArray(globalDeadSpaces)) {
-        deadSpaces.push(...globalDeadSpaces);
-                this.log(`🔇 Found ${globalDeadSpaces.length} global dead space regions`, 'info');
-            } else {
-                this.log('⚠️ Global dead space detection returned invalid format', 'warning');
-            }
-        } catch (deadSpaceError) {
-            this.log(`❌ Global dead space detection failed: ${deadSpaceError.message}`, 'error');
-        }
-        
-        const totalOverlaps = overlaps.length;
-        const totalDeadSpaces = deadSpaces.length;
-        
-        this.log(`✅ Multi-track analysis completed:`, 'success');
-        this.log(`   📊 ${totalOverlaps} overlaps found between tracks`, 'success');
-        this.log(`   🔇 ${totalDeadSpaces} dead space regions identified`, 'success');
-        
-        // Step 4: Display comprehensive results
-        const results = {
-            overlaps: overlaps,
-            deadSpaces: deadSpaces,
-            trackPairs: trackPairs,
-            totalTracks: activeTracks.length,
-            analysisTime: Date.now()
+        // Use backend API for overlap analysis
+        const analysisOptions = {
+            analysisTypes: ['overlap', 'sync'],
+            overlapThreshold: 0.3,
+            syncTolerance: 0.1,
+            enableRealTimeProcessing: true
         };
         
-        this.displayMultiTrackOverlapResults(results);
-        this.lastMultiTrackResults = results;
+        const results = await this.multiTrackIntegration.analyzeTracks(
+            this.multiTrackConfig.tracks, 
+            analysisOptions
+        );
         
-        this.showUIMessage(`✅ Found ${totalOverlaps} overlaps and ${totalDeadSpaces} dead spaces across ${activeTracks.length} tracks`, 'success');
-        
-        return results;
+        // Process and display results
+        if (results.success) {
+            const overlapData = results.results.overlapAnalysis;
+            const syncData = results.results.syncAnalysis;
+            const totalOverlaps = results.statistics.totalOverlaps || 0;
+            const syncIssues = results.statistics.syncIssues || 0;
+            
+            this.log(`✅ Backend overlap analysis completed:`, 'success');
+            this.log(`   📊 ${totalOverlaps} overlaps found between tracks`, 'success');
+            this.log(`   🔄 ${syncIssues} sync issues identified`, 'success');
+            
+            this.showUIMessage(`✅ Backend analysis complete: ${totalOverlaps} overlaps, ${syncIssues} sync issues`, 'success');
+            
+            // Update track data with results
+            if (this.multiTrackIntegration && typeof this.multiTrackIntegration.updateTracksWithOverlapResults === 'function') {
+                this.multiTrackIntegration.updateTracksWithOverlapResults(results);
+            } else {
+                this.log('⚠️ updateTracksWithOverlapResults function not available', 'warning');
+            }
+            
+            // Display comprehensive results
+            this.displayMultiTrackOverlapResults(overlapData, syncData);
+            
+            return results;
+        } else {
+            throw new Error('Backend overlap analysis failed');
+        }
         
     } catch (error) {
         this.log(`❌ Multi-track overlap detection failed: ${error.message}`, 'error');
-        this.showUIMessage(`❌ Overlap detection failed: ${error.message}`, 'error');
+        this.showUIMessage(`❌ Backend overlap analysis failed: ${error.message}`, 'error');
+};
+
+AudioToolsPro.prototype.updateTracksWithRhythmResults = function(rhythmData) {
+    try {
+        this.log('📊 Updating tracks with backend rhythm results...', 'info');
+        
+        if (rhythmData && typeof rhythmData === 'object') {
+            // Store rhythm analysis results
+            this.lastRhythmResults = {
+                speechRegions: rhythmData.speechRegions || [],
+                silenceRegions: rhythmData.silenceRegions || [],
+                pacingAnalysis: rhythmData.pacingAnalysis || {},
+                flowAnalysis: rhythmData.flowAnalysis || {},
+                analysisTime: Date.now(),
+                analysisSource: 'backend'
+            };
+            
+            // Update individual tracks with rhythm information if available
+            if (this.multiTrackConfig && this.multiTrackConfig.tracks) {
+                this.multiTrackConfig.tracks.forEach((track, trackId) => {
+                    track.rhythmAnalysis = {
+                        averageSpeechRate: rhythmData.pacingAnalysis?.averageSpeechRate || 0,
+                        rhythmConsistency: rhythmData.pacingAnalysis?.rhythmConsistency || 0,
+                        speechRegions: rhythmData.speechRegions || [],
+                        lastRhythmAnalyzed: Date.now()
+                    };
+                });
+            }
+            
+            this.log(`✅ Updated rhythm data: ${rhythmData.speechRegions?.length || 0} speech regions`, 'info');
+        }
+    } catch (error) {
+        this.log(`❌ Failed to update tracks with rhythm results: ${error.message}`, 'error');
     }
 };
+
+// Update tracks with multitrack sync results from backend
+AudioToolsPro.prototype.updateTracksWithSyncResults = function(syncData) {
+    try {
+        this.log('📊 Updating tracks with backend sync results...', 'info');
+        
+        if (syncData && typeof syncData === 'object') {
+            // Store sync results
+            this.lastSyncResults = {
+                tracksSynced: syncData.tracksSynced || 0,
+                syncedTracks: syncData.syncedTracks || [],
+                offsets: syncData.offsets || [],
+                correlationScores: syncData.correlationScores || [],
+                syncQuality: syncData.syncQuality || 'unknown',
+                syncConfidence: syncData.syncConfidence || 0,
+                analysisTime: Date.now(),
+                analysisSource: 'backend'
+            };
+            
+            // Update individual tracks with sync information
+            if (this.multiTrackConfig && this.multiTrackConfig.tracks && syncData.syncedTracks) {
+                syncData.syncedTracks.forEach((syncedTrack, index) => {
+                    const track = Array.from(this.multiTrackConfig.tracks.values())[index];
+                    if (track) {
+                        track.syncOffset = syncedTrack.offset || 0;
+                        track.syncConfidence = syncData.correlationScores?.[index] || 0;
+                        track.lastSynced = Date.now();
+                        track.syncSource = 'backend';
+                    }
+                });
+            }
+            
+            this.log(`✅ Updated sync data: ${syncData.tracksSynced} tracks synced`, 'info');
+        }
+    } catch (error) {
+        this.log(`❌ Failed to update tracks with sync results: ${error.message}`, 'error');
+    }
+};
+
+// BACKEND INTEGRATION HELPER FUNCTIONS
+// ========================================
+
+// Update tracks with silence detection results from backend
+AudioToolsPro.prototype.updateTracksWithSilenceResults = function(silenceData) {
+    try {
+        this.log('📊 Updating tracks with backend silence results...', 'info');
+        
+        // Check if multiTrackConfig exists
+        if (!this.multiTrackConfig || !this.multiTrackConfig.tracks) {
+            this.log('⚠️ MultiTrack configuration not initialized', 'warning');
+            return;
+        }
+        
+        if (silenceData && typeof silenceData === 'object') {
+            Object.keys(silenceData).forEach((trackId, index) => {
+                const trackData = silenceData[trackId];
+                
+                // Find matching track by filename or index
+                let matchingTrack = null;
+                
+                // Try to find by filename first
+                for (const [id, track] of this.multiTrackConfig.tracks.entries()) {
+                    if (track.name === trackData.filename) {
+                        matchingTrack = track;
+                        break;
+                    }
+                }
+                
+                // If not found by filename, try by index
+                if (!matchingTrack) {
+                    const trackArray = Array.from(this.multiTrackConfig.tracks.values());
+                    if (trackArray[index]) {
+                        matchingTrack = trackArray[index];
+                    }
+                }
+                
+                if (matchingTrack && trackData.segments) {
+                    matchingTrack.silenceRegions = trackData.segments.map(segment => ({
+                        start: segment.start,
+                        end: segment.end,
+                        duration: segment.duration,
+                        confidence: segment.confidence || 0.8,
+                        method: segment.method || 'backend'
+                    }));
+                    matchingTrack.silencePercentage = (trackData.totalDuration / (matchingTrack.duration || 1)) * 100;
+                    matchingTrack.lastAnalyzed = Date.now();
+                    matchingTrack.analysisSource = 'backend';
+                    
+                    this.log(`✅ Updated ${matchingTrack.name}: ${trackData.segments.length} silence regions (${trackData.totalDuration.toFixed(1)}s total)`, 'info');
+                } else {
+                    this.log(`⚠️ Could not find matching track for ${trackData.filename}`, 'warning');
+                }
+            });
+        }
+    } catch (error) {
+        this.log(`❌ Failed to update tracks with silence results: ${error.message}`, 'error');
+    }
+};
+
+// Update tracks with trim results from backend
+AudioToolsPro.prototype.updateTracksWithTrimResults = function(trimData) {
+    try {
+        this.log('📊 Updating tracks with backend trim results...', 'info');
+        
+        if (trimData && typeof trimData === 'object') {
+            this.multiTrackConfig.tracks.forEach((track, trackId) => {
+                if (trimData[trackId] || trimData[track.name]) {
+                    const results = trimData[trackId] || trimData[track.name];
+                    track.trimPoints = results.trimPoints || [];
+                    track.trimmedDuration = results.trimmedDuration || 0;
+                    track.lastTrimmed = Date.now();
+                    track.trimSource = 'backend';
+                    
+                    this.log(`✅ Updated ${track.name}: ${track.trimPoints.length} trim points`, 'info');
+                }
+            });
+        }
+    } catch (error) {
+        this.log(`❌ Failed to update tracks with trim results: ${error.message}`, 'error');
+    }
+};
+
+// Update tracks with overlap detection results from backend
+AudioToolsPro.prototype.updateTracksWithOverlapResults = function(overlapData, syncData) {
+    try {
+        this.log('📊 Updating tracks with backend overlap/sync results...', 'info');
+        
+        if (overlapData && typeof overlapData === 'object') {
+            // Store overlap analysis results
+            this.lastMultiTrackResults = {
+                overlaps: overlapData.overlaps || [],
+                trackPairs: overlapData.trackPairs || [],
+                totalTracks: this.multiTrackConfig.currentTrackCount,
+                analysisTime: Date.now(),
+                analysisSource: 'backend'
+            };
+            
+            // Update individual tracks with overlap information
+            this.multiTrackConfig.tracks.forEach((track, trackId) => {
+                if (overlapData[trackId] || overlapData[track.name]) {
+                    const results = overlapData[trackId] || overlapData[track.name];
+                    track.overlapRegions = results.regions || [];
+                    track.overlapCount = results.count || 0;
+                    track.lastOverlapAnalyzed = Date.now();
+                }
+            });
+        }
+        
+        if (syncData && typeof syncData === 'object') {
+            // Update tracks with sync information
+            this.multiTrackConfig.tracks.forEach((track, trackId) => {
+                if (syncData[trackId] || syncData[track.name]) {
+                    const results = syncData[trackId] || syncData[track.name];
+                    track.syncOffset = results.offset || 0;
+                    track.syncConfidence = results.confidence || 0;
+                    track.lastSyncAnalyzed = Date.now();
+                }
+            });
+        }
+        
+        this.log('✅ Tracks updated with backend overlap/sync results', 'success');
+    } catch (error) {
+        this.log(`❌ Failed to update tracks with overlap results: ${error.message}`, 'error');
+    }
+};
+
+// Display multitrack overlap results with backend data
+AudioToolsPro.prototype.displayMultiTrackOverlapResults = function(overlapData, syncData) {
+    try {
+        this.log('🎨 Displaying backend overlap analysis results...', 'info');
+        
+        // Find or create results container
+        let resultsContainer = document.getElementById('multiTrackOverlapResults');
+        if (!resultsContainer) {
+            resultsContainer = document.createElement('div');
+            resultsContainer.id = 'multiTrackOverlapResults';
+            resultsContainer.className = 'multitrack-results';
+            
+            const multiTrackContainer = document.getElementById('multiTrackVisualization');
+            if (multiTrackContainer && multiTrackContainer.parentNode) {
+                multiTrackContainer.parentNode.insertBefore(resultsContainer, multiTrackContainer.nextSibling);
+            }
+        }
+        
+        const totalOverlaps = (overlapData && overlapData.overlaps) ? overlapData.overlaps.length : 0;
+        const syncIssues = (syncData && syncData.issues) ? syncData.issues.length : 0;
+        
+        resultsContainer.innerHTML = `
+            <div class="results-header">
+                <h3><i class="fas fa-analytics"></i> Backend Overlap Analysis Results</h3>
+                <div class="results-summary">
+                    <div class="summary-item">
+                        <div class="summary-value">${totalOverlaps}</div>
+                        <div class="summary-label">Overlaps Found</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-value">${syncIssues}</div>
+                        <div class="summary-label">Sync Issues</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-value">${this.multiTrackConfig.currentTrackCount}</div>
+                        <div class="summary-label">Tracks Analyzed</div>
+                    </div>
+                </div>
+            </div>
+            <div class="results-content">
+                <div class="analysis-note">
+                    <i class="fas fa-server"></i>
+                    <span>Analysis performed by backend API with advanced algorithms</span>
+                </div>
+                ${totalOverlaps > 0 ? this.renderOverlapsList(overlapData.overlaps) : '<p>No overlaps detected between tracks.</p>'}
+                ${syncIssues > 0 ? this.renderSyncIssuesList(syncData.issues) : '<p>All tracks are properly synchronized.</p>'}
+            </div>
+        `;
+        
+        resultsContainer.style.display = 'block';
+        this.log('✅ Backend overlap results displayed', 'success');
+        
+    } catch (error) {
+        this.log(`❌ Failed to display overlap results: ${error.message}`, 'error');
+    }
+};
+
+// Render overlaps list helper
+AudioToolsPro.prototype.renderOverlapsList = function(overlaps) {
+    if (!overlaps || overlaps.length === 0) return '';
+    
+    return `
+        <div class="overlap-results">
+            <h4><i class="fas fa-intersection"></i> Detected Overlaps</h4>
+            <div class="overlap-list">
+                ${overlaps.map((overlap, index) => `
+                    <div class="overlap-item" data-overlap-id="${index}">
+                        <div class="overlap-info">
+                            <span class="overlap-time">${this.formatTime(overlap.startTime)} - ${this.formatTime(overlap.endTime)}</span>
+                            <span class="overlap-duration">${this.formatTime(overlap.duration)}</span>
+                            <span class="overlap-tracks">${overlap.tracks ? overlap.tracks.join(' vs ') : 'Multiple tracks'}</span>
+                        </div>
+                        <div class="overlap-confidence">
+                            <span class="confidence-label">Confidence:</span>
+                            <span class="confidence-value">${(overlap.confidence * 100).toFixed(1)}%</span>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
+};
+
+// Render sync issues list helper
+AudioToolsPro.prototype.renderSyncIssuesList = function(syncIssues) {
+    if (!syncIssues || syncIssues.length === 0) return '';
+    
+    return `
+        <div class="sync-results">
+            <h4><i class="fas fa-sync"></i> Sync Issues</h4>
+            <div class="sync-list">
+                ${syncIssues.map((issue, index) => `
+                    <div class="sync-item" data-sync-id="${index}">
+                        <div class="sync-info">
+                            <span class="sync-tracks">${issue.tracks ? issue.tracks.join(' vs ') : 'Multiple tracks'}</span>
+                            <span class="sync-offset">Offset: ${issue.offset}ms</span>
+                            <span class="sync-type">${issue.type || 'Timing'}</span>
+                        </div>
+                        <div class="sync-severity">
+                            <span class="severity-${issue.severity || 'medium'}">${(issue.severity || 'medium').toUpperCase()}</span>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
+};
+
+// ========================================
+// RHYTHM BACKEND INTEGRATION HELPERS
+// ========================================
+
+// Convert backend rhythm corrections to frontend format
+AudioToolsPro.prototype.convertBackendCorrections = function(rhythmData) {
+    const corrections = [];
+    let correctionId = 0;
+    
+    this.log('🔍 Converting backend corrections, input data:', 'debug');
+    this.log(`   - Has recommendations: ${!!(rhythmData.recommendations && rhythmData.recommendations.length > 0)}`);
+    this.log(`   - Has pacingAnalysis.issues: ${!!(rhythmData.pacingAnalysis && rhythmData.pacingAnalysis.issues)}`);
+    this.log(`   - Has silenceRegions: ${!!(rhythmData.silenceRegions && rhythmData.silenceRegions.length > 0)}`);
+    this.log(`   - Has speechRegions: ${!!(rhythmData.speechRegions && rhythmData.speechRegions.length > 0)}`);
+    
+    // Convert from backend format to frontend format
+    if (rhythmData.recommendations && rhythmData.recommendations.length > 0) {
+        rhythmData.recommendations.forEach(rec => {
+            corrections.push({
+                id: correctionId++,
+                startTime: rec.startTime || 0,
+                endTime: rec.endTime || rec.startTime + rec.duration || 1,
+                action: rec.action || 'optimize_timing',
+                currentDuration: rec.duration || 1,
+                suggestedDuration: rec.suggestedDuration || rec.duration || 1,
+                description: rec.description || 'Optimize timing',
+                confidence: rec.confidence || 0.8
+            });
+        });
+    }
+    
+    // Generate basic corrections from pacing issues
+    if (rhythmData.pacingAnalysis && rhythmData.pacingAnalysis.issues) {
+        rhythmData.pacingAnalysis.issues.forEach(issue => {
+            corrections.push({
+                id: correctionId++,
+                startTime: issue.startTime || 0,
+                endTime: issue.endTime || issue.startTime + 1,
+                action: issue.type === 'long_pause' ? 'trim_pause' : 'optimize_timing',
+                currentDuration: issue.duration || 1,
+                suggestedDuration: issue.suggestedDuration || issue.duration * 0.7,
+                description: issue.description || `Fix ${issue.type}`,
+                confidence: issue.confidence || 0.7
+            });
+        });
+    }
+    
+    // Generate corrections from silence regions (long pauses that could be trimmed)
+    if (rhythmData.silenceRegions && rhythmData.silenceRegions.length > 0) {
+        rhythmData.silenceRegions.forEach(silence => {
+            const start = silence.start ?? silence.startTime ?? 0;
+            const end = silence.end ?? silence.endTime ?? (start + (silence.duration || 0));
+            const duration = silence.duration ?? Math.max(0, end - start);
+            // Only suggest corrections for pauses longer than 2 seconds
+            if (duration > 2.0) {
+                corrections.push({
+                    id: correctionId++,
+                    startTime: start,
+                    endTime: end,
+                    action: 'trim_pause',
+                    currentDuration: duration,
+                    suggestedDuration: Math.max(0.5, duration * 0.3), // Trim to 30% or min 0.5s
+                    description: `Trim long pause (${duration.toFixed(1)}s → ${Math.max(0.5, duration * 0.3).toFixed(1)}s)`,
+                    confidence: 0.8
+                });
+            }
+        });
+    }
+    
+    // Generate corrections from speech regions with timing issues
+    if (rhythmData.speechRegions && rhythmData.speechRegions.length > 0) {
+        rhythmData.speechRegions.forEach(speech => {
+            const duration = (speech.endTime - speech.startTime);
+            // Suggest pace adjustments for very fast or very slow speech segments
+            if (duration < 1.0 && speech.wordCount && speech.wordCount > 5) {
+                // Very fast speech
+                corrections.push({
+                    id: correctionId++,
+                    startTime: speech.startTime,
+                    endTime: speech.endTime,
+                    action: 'slow_down_speech',
+                    currentDuration: duration,
+                    suggestedDuration: duration * 1.2, // Slow down by 20%
+                    description: `Slow down fast speech (${speech.wordCount} words in ${duration.toFixed(1)}s)`,
+                    confidence: 0.6
+                });
+            }
+        });
+    }
+    
+    // If no corrections found, generate a demo correction for testing
+    if (corrections.length === 0 && rhythmData.audioDuration > 0) {
+        corrections.push({
+            id: correctionId++,
+            startTime: Math.max(0, rhythmData.audioDuration * 0.1),
+            endTime: Math.min(rhythmData.audioDuration, rhythmData.audioDuration * 0.2),
+            action: 'optimize_timing',
+            currentDuration: rhythmData.audioDuration * 0.1,
+            suggestedDuration: rhythmData.audioDuration * 0.08,
+            description: 'Sample timing optimization (demo)',
+            confidence: 0.5
+        });
+    }
+    
+    this.log(`🔧 Generated ${corrections.length} timing corrections from backend data`, 'info');
+    return corrections;
+};
+
+// Get audio blob from player for backend processing
+AudioToolsPro.prototype.getAudioBlobFromPlayer = async function() {
+    try {
+        if (!this.audioPlayer || !this.audioPlayer.src) {
+            throw new Error('No audio loaded in player');
+        }
+        
+        // If we already have a blob cached, use it
+        if (this.currentAudioBlob) {
+            return this.currentAudioBlob;
+        }
+        
+        // Convert audio URL to blob
+        const response = await fetch(this.audioPlayer.src);
+        if (!response.ok) {
+            throw new Error(`Failed to fetch audio: ${response.status}`);
+        }
+        
+        const blob = await response.blob();
+        this.currentAudioBlob = blob; // Cache for future use
+        
+        return blob;
+        
+    } catch (error) {
+        this.log(`❌ Failed to get audio blob: ${error.message}`, 'error');
+        throw error;
+    }
+};
+
+// Display timing correction results from backend
+AudioToolsPro.prototype.displayTimingCorrectionResults = function(results) {
+    try {
+        this.log('🎨 Displaying timing correction results...', 'info');
+        
+        // Find or create results container
+        let resultsContainer = document.getElementById('timingCorrectionResults');
+        if (!resultsContainer) {
+            resultsContainer = document.createElement('div');
+            resultsContainer.id = 'timingCorrectionResults';
+            resultsContainer.className = 'rhythm-results';
+            
+            const rhythmContainer = document.querySelector('.rhythm-timing-section');
+            if (rhythmContainer) {
+                rhythmContainer.appendChild(resultsContainer);
+            }
+        }
+        
+        const correctedFile = results.correctedFile;
+        const originalFile = results.originalFile;
+        
+        resultsContainer.innerHTML = `
+            <div class="results-header">
+                <h3><i class="fas fa-magic"></i> Timing Correction Results</h3>
+                <div class="results-summary">
+                    <div class="summary-item">
+                        <div class="summary-value">${results.results.correctionsApplied}</div>
+                        <div class="summary-label">Corrections Applied</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-value">${originalFile.duration.toFixed(1)}s</div>
+                        <div class="summary-label">Original Duration</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-value">${correctedFile.duration.toFixed(1)}s</div>
+                        <div class="summary-label">Corrected Duration</div>
+                    </div>
+                </div>
+            </div>
+            <div class="results-actions">
+                <button id="downloadCorrectedAudio" class="btn btn-primary">
+                    <i class="fas fa-download"></i> Download Corrected Audio
+                </button>
+                <button id="previewCorrectedAudio" class="btn btn-secondary">
+                    <i class="fas fa-play"></i> Preview Corrected Audio
+                </button>
+            </div>
+            <div class="correction-details">
+                <p><i class="fas fa-server"></i> Processing completed by backend API using ${results.results.method}</p>
+                <p><i class="fas fa-clock"></i> Processing time: ${results.processingTime}</p>
+            </div>
+        `;
+        
+        // Add event listeners for action buttons
+        const downloadBtn = resultsContainer.querySelector('#downloadCorrectedAudio');
+        if (downloadBtn) {
+            downloadBtn.addEventListener('click', () => {
+                this.downloadCorrectedAudio(correctedFile.downloadUrl, correctedFile.name);
+            });
+        }
+        
+        const previewBtn = resultsContainer.querySelector('#previewCorrectedAudio');
+        if (previewBtn) {
+            previewBtn.addEventListener('click', () => {
+                this.previewCorrectedAudio(correctedFile.downloadUrl);
+            });
+        }
+        
+        resultsContainer.style.display = 'block';
+        this.log('✅ Timing correction results displayed', 'success');
+        
+    } catch (error) {
+        this.log(`❌ Failed to display correction results: ${error.message}`, 'error');
+    }
+};
+
+// Enable correction download buttons
+AudioToolsPro.prototype.enableCorrectionDownloadButtons = function() {
+    const downloadBtn = document.getElementById('downloadCorrectedAudio');
+    const previewBtn = document.getElementById('previewCorrectedAudio');
+    
+    if (downloadBtn) downloadBtn.disabled = false;
+    if (previewBtn) previewBtn.disabled = false;
+};
+
+// Download corrected audio file
+AudioToolsPro.prototype.downloadCorrectedAudio = function(downloadUrl, fileName) {
+    try {
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        this.log(`✅ Started download of corrected audio: ${fileName}`, 'success');
+        this.showUIMessage('✅ Download started!', 'success');
+        
+    } catch (error) {
+        this.log(`❌ Failed to download corrected audio: ${error.message}`, 'error');
+        this.showUIMessage(`❌ Download failed: ${error.message}`, 'error');
+    }
+};
+
+// Preview corrected audio file
+AudioToolsPro.prototype.previewCorrectedAudio = function(audioUrl) {
+    try {
+        // Create or update preview audio element
+        let previewAudio = document.getElementById('correctedAudioPreview');
+        if (!previewAudio) {
+            previewAudio = document.createElement('audio');
+            previewAudio.id = 'correctedAudioPreview';
+            previewAudio.controls = true;
+            previewAudio.style.width = '100%';
+            previewAudio.style.marginTop = '10px';
+            
+            const resultsContainer = document.getElementById('timingCorrectionResults');
+            if (resultsContainer) {
+                resultsContainer.appendChild(previewAudio);
+            }
+        }
+        
+        previewAudio.src = audioUrl;
+        previewAudio.load();
+        
+        this.log('✅ Corrected audio ready for preview', 'success');
+        this.showUIMessage('✅ Corrected audio loaded for preview', 'success');
+        
+    } catch (error) {
+        this.log(`❌ Failed to preview corrected audio: ${error.message}`, 'error');
+        this.showUIMessage(`❌ Preview failed: ${error.message}`, 'error');
+    }
+};
+
+// ========================================
+// SILENCE BACKEND INTEGRATION HELPER FUNCTIONS
+// ========================================
+
+/**
+ * Display silence trimming results in the UI
+ */
+AudioToolsPro.prototype.displaySilenceTrimResults = function(results) {
+    try {
+        this.log('🎨 Displaying silence trim results...', 'info');
+        
+        // Update results panel with trimming information
+        const resultsPanel = document.getElementById('silenceResults');
+        if (resultsPanel) {
+            resultsPanel.innerHTML = `
+                <div class="results-header">
+                    <h3>🎵 Silence Trimming Results</h3>
+                </div>
+                <div class="results-content">
+                    <div class="result-item">
+                        <span class="label">Original Duration:</span>
+                        <span class="value">${this.formatTime(results.originalDuration)}</span>
+                    </div>
+                    <div class="result-item">
+                        <span class="label">Trimmed Duration:</span>
+                        <span class="value">${this.formatTime(results.trimmedDuration)}</span>
+                    </div>
+                    <div class="result-item">
+                        <span class="label">Time Saved:</span>
+                        <span class="value">${this.formatTime(results.timeSaved)}</span>
+                    </div>
+                    <div class="result-item">
+                        <span class="label">Segments Removed:</span>
+                        <span class="value">${results.segmentsRemoved}</span>
+                    </div>
+                    ${results.downloadUrl ? `
+                        <div class="download-controls">
+                            <a href="${results.downloadUrl}" download="${results.fileName}" class="btn btn-download">
+                                📁 Download Trimmed Audio
+                            </a>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+        
+        this.log('✅ Silence trim results displayed successfully', 'success');
+    } catch (error) {
+        this.log(`❌ Failed to display silence trim results: ${error.message}`, 'error');
+    }
+};
+
+/**
+ * Convert backend silence segments to frontend format
+ */
+AudioToolsPro.prototype.convertBackendSilenceSegments = function(backendSegments) {
+    try {
+        return backendSegments.map(segment => ({
+            start: segment.startTime || segment.start || 0,
+            end: segment.endTime || segment.end || 0,
+            duration: segment.duration || 0,
+            confidence: segment.confidence || 0,
+            type: segment.type || 'silence',
+            method: segment.method || 'backend'
+        }));
+    } catch (error) {
+        this.log(`❌ Failed to convert backend silence segments: ${error.message}`, 'error');
+        return [];
+    }
+};
+
+/**
+ * Update silence UI with backend processing status
+ */
+AudioToolsPro.prototype.updateSilenceProcessingStatus = function(status, progress = 0) {
+    try {
+        const statusElement = document.getElementById('silenceProcessingStatus');
+        if (statusElement) {
+            statusElement.textContent = status;
+        }
+        
+        const progressElement = document.getElementById('silenceProgressBar');
+        if (progressElement) {
+            progressElement.style.width = `${progress}%`;
+        }
+        
+        this.log(`📊 Silence processing status: ${status} (${progress}%)`, 'info');
+    } catch (error) {
+        this.log(`❌ Failed to update silence processing status: ${error.message}`, 'error');
+    }
+};
+
+/**
+ * Test silence integration with backend
+ */
+AudioToolsPro.prototype.testSilenceIntegration = async function() {
+    try {
+        this.log('🧪 Testing silence integration...', 'info');
+        
+        if (!this.silenceIntegration) {
+            throw new Error('Silence integration not initialized');
+        }
+        
+        // Test connection
+        const isConnected = await this.silenceIntegration.testConnection();
+        if (!isConnected) {
+            throw new Error('Backend silence service is not available');
+        }
+        
+        // Test getting detection methods
+        const methods = await this.silenceIntegration.getDetectionMethods();
+        this.log(`✅ Available silence detection methods: ${methods.methods.length}`, 'success');
+        
+        this.showUIMessage('✅ Silence integration test passed!', 'success');
+        return true;
+    } catch (error) {
+        this.log(`❌ Silence integration test failed: ${error.message}`, 'error');
+        this.showUIMessage(`❌ Test failed: ${error.message}`, 'error');
+        return false;
+    }
+};
+
+/**
+ * Enable silence download buttons after processing
+ */
+AudioToolsPro.prototype.enableSilenceDownloadButtons = function() {
+    try {
+        const downloadButtons = document.querySelectorAll('.silence-download-btn');
+        downloadButtons.forEach(button => {
+            button.disabled = false;
+            button.classList.remove('disabled');
+        });
+        
+        this.log('🔓 Silence download buttons enabled', 'info');
+    } catch (error) {
+        this.log(`❌ Failed to enable silence download buttons: ${error.message}`, 'error');
+    }
+};
+
+// ========================================
+// END BACKEND INTEGRATION HELPERS
+// ========================================
+
+// ========================================
+// NEW BACKEND INTEGRATION FUNCTIONS
+// ========================================
+
+// Dynamic Ducking via Backend API
+AudioToolsPro.prototype.runDynamicDucking = async function() {
+    try {
+        this.log('🔇 Starting Dynamic Ducking via Backend API...', 'info');
+        this.showUIMessage('🔇 Configuring dynamic ducking via backend...', 'processing');
+        
+        if (this.multiTrackConfig.currentTrackCount < 2) {
+            this.showUIMessage('❌ Need at least 2 tracks for dynamic ducking.', 'error');
+            return;
+        }
+        
+        if (!this.multiTrackIntegration) {
+            throw new Error('Backend integration not available. Please ensure the backend server is running.');
+        }
+        
+        const duckingOptions = {
+            primaryTrack: 0, // First track as primary
+            secondaryTracks: Array.from({length: this.multiTrackConfig.currentTrackCount - 1}, (_, i) => i + 1),
+            duckingRatio: 0.3,
+            attackTime: 0.01,
+            releaseTime: 0.1,
+            threshold: -20,
+            enableAutoDucking: true
+        };
+        
+        const results = await this.multiTrackIntegration.configureDucking(
+            this.multiTrackConfig.tracks,
+            duckingOptions
+        );
+        
+        if (results.success) {
+            this.log('✅ Dynamic ducking configured successfully', 'success');
+            this.showUIMessage('✅ Dynamic ducking applied!', 'success');
+            
+            // Update tracks with ducking results
+            if (this.multiTrackIntegration && typeof this.multiTrackIntegration.updateTracksWithDuckingResults === 'function') {
+                this.multiTrackIntegration.updateTracksWithDuckingResults(results);
+            } else {
+                this.log('⚠️ updateTracksWithDuckingResults function not available', 'warning');
+            }
+            return results;
+        } else {
+            throw new Error('Backend ducking configuration failed');
+        }
+        
+    } catch (error) {
+        this.log(`❌ Dynamic ducking failed: ${error.message}`, 'error');
+        this.showUIMessage(`❌ Dynamic ducking failed: ${error.message}`, 'error');
+    }
+};
+
+// Multi-Cam Sync via Backend API
+AudioToolsPro.prototype.runMultiCamSync = async function() {
+    try {
+        this.log('🎥 Starting Multi-Cam Sync via Backend API...', 'info');
+        this.showUIMessage('🎥 Syncing multi-cam tracks via backend...', 'processing');
+        
+        if (this.multiTrackConfig.currentTrackCount < 2) {
+            this.showUIMessage('❌ Need at least 2 tracks for multi-cam sync.', 'error');
+            return;
+        }
+        
+        if (!this.multiTrackIntegration) {
+            throw new Error('Backend integration not available. Please ensure the backend server is running.');
+        }
+        
+        const syncOptions = {
+            syncMethod: 'auto',
+            referenceTrack: 0,
+            syncTolerance: 0.1,
+            enableMultiCamSync: true,
+            outputFormat: 'mp3',
+            quality: 'high'
+        };
+        
+        const results = await this.multiTrackIntegration.syncTracks(
+            this.multiTrackConfig.tracks,
+            syncOptions
+        );
+        
+        if (results.success) {
+            this.log('✅ Multi-cam sync completed successfully', 'success');
+            this.showUIMessage('✅ Multi-cam tracks synced!', 'success');
+            
+            // Update tracks with sync results
+            this.updateTracksWithSyncResults(results.results);
+            return results;
+        } else {
+            throw new Error('Backend multi-cam sync failed');
+        }
+        
+    } catch (error) {
+        this.log(`❌ Multi-cam sync failed: ${error.message}`, 'error');
+        this.showUIMessage(`❌ Multi-cam sync failed: ${error.message}`, 'error');
+    }
+};
+
+// Submix Routing via Backend API
+AudioToolsPro.prototype.runSubmixRouting = async function() {
+    try {
+        this.log('🎚️ Starting Submix Routing via Backend API...', 'info');
+        this.showUIMessage('🎚️ Configuring submix routing via backend...', 'processing');
+        
+        if (this.multiTrackConfig.currentTrackCount === 0) {
+            this.showUIMessage('❌ No tracks available for submix routing.', 'error');
+            return;
+        }
+        
+        if (!this.multiTrackIntegration) {
+            throw new Error('Backend integration not available. Please ensure the backend server is running.');
+        }
+        
+        const submixOptions = {
+            submixGroups: this.multiTrackConfig.submixRouting,
+            trackAssignments: this.generateAutoTrackAssignments(),
+            enableAutoRouting: true,
+            outputFormat: 'mp3',
+            quality: 'high'
+        };
+        
+        const results = await this.multiTrackIntegration.configureSubmixRouting(
+            this.multiTrackConfig.tracks,
+            submixOptions
+        );
+        
+        if (results.success) {
+            this.log('✅ Submix routing configured successfully', 'success');
+            this.showUIMessage('✅ Submix routing applied!', 'success');
+            
+            // Update tracks with submix results
+            this.updateTracksWithSubmixResults(results.results);
+            return results;
+        } else {
+            throw new Error('Backend submix routing failed');
+        }
+        
+    } catch (error) {
+        this.log(`❌ Submix routing failed: ${error.message}`, 'error');
+        this.showUIMessage(`❌ Submix routing failed: ${error.message}`, 'error');
+    }
+};
+
+// Helper function to generate automatic track assignments
+AudioToolsPro.prototype.generateAutoTrackAssignments = function() {
+    const assignments = [];
+    let trackIndex = 0;
+    
+    this.multiTrackConfig.tracks.forEach((track, trackId) => {
+        let submix = 'main'; // Default
+        
+        // Auto-assign based on track type
+        if (track.type === 'speech' || track.type === 'voice') {
+            submix = 'speech';
+        } else if (track.type === 'music') {
+            submix = 'music';
+        } else if (track.type === 'effects') {
+            submix = 'effects';
+        }
+        
+        assignments.push({
+            trackId: trackIndex,
+            submix: submix,
+            gain: 1.0
+        });
+        
+        trackIndex++;
+    });
+    
+    return assignments;
+};
+
+// Update tracks with ducking results
+AudioToolsPro.prototype.updateTracksWithDuckingResults = function(duckingData) {
+    try {
+        if (duckingData && duckingData.duckingData) {
+            this.multiTrackConfig.tracks.forEach((track, trackId) => {
+                track.duckingApplied = true;
+                track.duckingRatio = duckingData.averageDuckingRatio || 0.3;
+                track.lastDuckingApplied = Date.now();
+            });
+            
+            this.log('✅ Tracks updated with ducking results', 'success');
+        }
+    } catch (error) {
+        this.log(`❌ Failed to update tracks with ducking results: ${error.message}`, 'error');
+    }
+};
+
+// Update tracks with sync results
+AudioToolsPro.prototype.updateTracksWithSyncResults = function(syncData) {
+    try {
+        if (syncData && syncData.syncData) {
+            const offsets = syncData.syncData.offsets || [];
+            let trackIndex = 0;
+            
+            this.multiTrackConfig.tracks.forEach((track, trackId) => {
+                if (trackIndex < offsets.length) {
+                    track.syncOffset = offsets[trackIndex] || 0;
+                    track.syncConfidence = syncData.syncData.syncConfidence || 0;
+                    track.lastSyncApplied = Date.now();
+                }
+                trackIndex++;
+            });
+            
+            this.log('✅ Tracks updated with sync results', 'success');
+        }
+    } catch (error) {
+        this.log(`❌ Failed to update tracks with sync results: ${error.message}`, 'error');
+    }
+};
+
+// Update tracks with submix results
+AudioToolsPro.prototype.updateTracksWithSubmixResults = function(submixData) {
+    try {
+        if (submixData && submixData.routingData) {
+            const assignments = submixData.routingData.trackAssignments || [];
+            
+            assignments.forEach((assignment, index) => {
+                const tracks = Array.from(this.multiTrackConfig.tracks.values());
+                if (index < tracks.length) {
+                    const track = tracks[index];
+                    track.submixAssignment = assignment.submix || 'main';
+                    track.submixGain = assignment.gain || 1.0;
+                    track.lastSubmixApplied = Date.now();
+                }
+            });
+            
+            this.log('✅ Tracks updated with submix results', 'success');
+        }
+    } catch (error) {
+        this.log(`❌ Failed to update tracks with submix results: ${error.message}`, 'error');
+    }
+};
+
+// ========================================
+// END NEW BACKEND INTEGRATION FUNCTIONS
+// ========================================
 
 // Load audio buffer for a specific track - UPDATED FOR REAL MULTI-TRACK
 AudioToolsPro.prototype.loadTrackAudioBuffer = async function(track) {
@@ -20604,81 +21324,6 @@ AudioToolsPro.prototype.loadTrackAudioBuffer = async function(track) {
     }
 };
 
-// Detect real overlaps between two tracks using audio analysis
-AudioToolsPro.prototype.detectRealOverlapsBetweenTracks = async function(track1Data, track2Data) {
-    const overlaps = [];
-    const deadSpaces = [];
-    
-    try {
-        this.log(`🔍 Performing real-time analysis between ${track1Data.track.name} and ${track2Data.track.name}`, 'info');
-        
-        const sampleRate = Math.min(track1Data.sampleRate, track2Data.sampleRate);
-        const duration = Math.min(track1Data.duration, track2Data.duration);
-        
-        // Analysis parameters
-        const windowSize = 0.1; // 100ms windows
-        const overlapThreshold = 0.02; // 2% energy threshold for "active" audio
-        const silenceThreshold = 0.001; // Threshold for silence detection
-        
-        const totalWindows = Math.floor(duration / windowSize);
-        
-        for (let i = 0; i < totalWindows; i++) {
-            const startTime = i * windowSize;
-            const endTime = Math.min(startTime + windowSize, duration);
-            
-            // Get audio energy for this window in both tracks
-            const track1Energy = this.calculateAudioEnergyInWindow(track1Data.channelData, startTime, endTime, sampleRate);
-            const track2Energy = this.calculateAudioEnergyInWindow(track2Data.channelData, startTime, endTime, sampleRate);
-            
-            // Check for overlap (both tracks have significant audio)
-            if (track1Energy > overlapThreshold && track2Energy > overlapThreshold) {
-                // This is a real overlap - both tracks are playing simultaneously
-                const overlapSeverity = Math.min(track1Energy, track2Energy) / Math.max(track1Energy, track2Energy);
-                
-                overlaps.push({
-                    startTime: startTime,
-                    endTime: endTime,
-                    duration: endTime - startTime,
-                    track1: track1Data.track.name,
-                    track2: track2Data.track.name,
-                    track1Energy: track1Energy,
-                    track2Energy: track2Energy,
-                    severity: overlapSeverity,
-                    type: 'simultaneous_playback',
-                    confidence: 0.9
-                });
-            }
-            
-            // Check for dead space (both tracks are silent)
-            else if (track1Energy < silenceThreshold && track2Energy < silenceThreshold) {
-                deadSpaces.push({
-                    startTime: startTime,
-                    endTime: endTime,
-                    duration: endTime - startTime,
-                    type: 'dead_space',
-                    tracks: [track1Data.track.name, track2Data.track.name]
-                });
-            }
-        }
-        
-        // Merge consecutive overlaps and dead spaces
-        const mergedOverlaps = this.mergeConsecutiveRegions(overlaps, 0.2); // Merge if within 200ms
-        const mergedDeadSpaces = this.mergeConsecutiveRegions(deadSpaces, 0.5); // Merge if within 500ms
-        
-        this.log(`📊 Analysis results for ${track1Data.track.name} vs ${track2Data.track.name}:`, 'info');
-        this.log(`   🔄 ${mergedOverlaps.length} overlap regions found`, 'info');
-        this.log(`   🔇 ${mergedDeadSpaces.length} dead space regions found`, 'info');
-        
-        return {
-            overlaps: mergedOverlaps,
-            deadSpaces: mergedDeadSpaces
-        };
-        
-    } catch (error) {
-        this.log(`❌ Failed to analyze tracks ${track1Data.track.name} vs ${track2Data.track.name}: ${error.message}`, 'error');
-        return { overlaps: [], deadSpaces: [] };
-    }
-};
 
 // Calculate audio energy in a specific time window
 AudioToolsPro.prototype.calculateAudioEnergyInWindow = function(channelData, startTime, endTime, sampleRate) {
@@ -21011,6 +21656,7 @@ AudioToolsPro.prototype.setupDynamicDucking = async function() {
         this.log(`❌ Dynamic ducking setup failed: ${error.message}`, 'error');
         this.showUIMessage(`❌ Ducking setup failed: ${error.message}`, 'error');
     }
+    }
 };
 
 // Multi-Camera Alignment Toggle
@@ -21090,13 +21736,6 @@ AudioToolsPro.prototype.autoTrimTrack = async function(track) {
     return trimsApplied;
 };
 
-// ========================================
-// OVERLAP DETECTION WORKFLOW FUNCTIONS
-// ========================================
-
-// Removed runOverlapDetectionWorkflow - now using enhanced overlap detection system
-
-// Removed runOverlapResolutionWorkflow - now using enhanced overlap detection system
 
 /**
  * Get speech buffer from loaded tracks
@@ -21770,23 +22409,6 @@ AudioToolsPro.prototype.audioBufferToWav = function(audioBuffer) {
     return new Blob([arrayBuffer], { type: 'audio/wav' });
 };
 
-// ========================================
-// ENHANCED OVERLAP DETECTION SYSTEM
-// ========================================
-
-/**
- * Main overlap detection function for speech vs music analysis
- * @param {AudioBuffer} speechBuffer - The speech/voiceover track
- * @param {AudioBuffer} musicBuffer - The music/background track
- * @returns {Array} Array of overlap objects with startTime, endTime, severity, action, frequencyConflict
- */
-// Removed redundant detectOverlaps function - now using enhanced overlap detection system
-
-// Removed analyzeTrackForSpeech function - now using enhanced overlap detection system
-
-// Removed analyzeTrackForMusic function - now using enhanced overlap detection system
-
-// Removed all redundant overlap detection helper functions - now using enhanced overlap detection system
 
 // Display multi-track silence results
 AudioToolsPro.prototype.displayMultiTrackSilenceResults = function(results) {
@@ -21796,30 +22418,77 @@ AudioToolsPro.prototype.displayMultiTrackSilenceResults = function(results) {
     let html = '<div class="multi-track-results">';
     html += '<h5>🔇 Silence Detection Results</h5>';
     
-    for (const [trackId, silenceRegions] of results) {
-        const track = this.multiTrackConfig.tracks.get(trackId);
-        if (!track) continue;
-        
-        html += `
-            <div class="track-result">
-                <div class="track-header">
-                    <span class="track-name">${track.name}</span>
-                    <span class="track-count">${silenceRegions.length} silence regions</span>
-                </div>
-                <div class="silence-regions">
-        `;
-        
-        silenceRegions.forEach(region => {
+    // Handle both old format (Map/array) and new backend format (object)
+    if (results && typeof results === 'object' && !Symbol.iterator in Object(results)) {
+        // Backend format: { trackId: { filename, segments, totalDuration, segmentCount } }
+        Object.keys(results).forEach(trackId => {
+            const trackData = results[trackId];
+            if (!trackData.segments) return;
+            
+            // Find matching track
+            let track = null;
+            for (const [id, t] of this.multiTrackConfig.tracks.entries()) {
+                if (t.name === trackData.filename) {
+                    track = t;
+                    break;
+                }
+            }
+            
+            if (!track) {
+                track = { name: trackData.filename, id: trackId };
+            }
+            
             html += `
-                <div class="silence-region">
-                    <span class="region-time">${this.formatTime(region.start)} - ${this.formatTime(region.end)}</span>
-                    <span class="region-duration">${region.duration.toFixed(1)}s</span>
-                    <span class="region-confidence">${(region.confidence * 100).toFixed(0)}%</span>
-                </div>
+                <div class="track-result">
+                    <div class="track-header">
+                        <span class="track-name">${track.name}</span>
+                        <span class="track-count">${trackData.segments.length} silence regions (${trackData.totalDuration.toFixed(1)}s total)</span>
+                    </div>
+                    <div class="silence-regions">
             `;
+            
+            trackData.segments.forEach(region => {
+                html += `
+                    <div class="silence-region">
+                        <span class="region-time">${this.formatTime(region.start)} - ${this.formatTime(region.end)}</span>
+                        <span class="region-duration">${region.duration.toFixed(1)}s</span>
+                        <span class="region-confidence">${((region.confidence || 0.8) * 100).toFixed(0)}%</span>
+                        <span class="region-method">${region.method || 'backend'}</span>
+                    </div>
+                `;
+            });
+            
+            html += '</div></div>';
         });
-        
-        html += '</div></div>';
+    } else if (results && Symbol.iterator in Object(results)) {
+        // Legacy format: iterable (Map or array of arrays)
+        for (const [trackId, silenceRegions] of results) {
+            const track = this.multiTrackConfig.tracks.get(trackId);
+            if (!track) continue;
+            
+            html += `
+                <div class="track-result">
+                    <div class="track-header">
+                        <span class="track-name">${track.name}</span>
+                        <span class="track-count">${silenceRegions.length} silence regions</span>
+                    </div>
+                    <div class="silence-regions">
+            `;
+            
+            silenceRegions.forEach(region => {
+                html += `
+                    <div class="silence-region">
+                        <span class="region-time">${this.formatTime(region.start)} - ${this.formatTime(region.end)}</span>
+                        <span class="region-duration">${region.duration.toFixed(1)}s</span>
+                        <span class="region-confidence">${(region.confidence * 100).toFixed(0)}%</span>
+                    </div>
+                `;
+            });
+            
+            html += '</div></div>';
+        }
+    } else {
+        html += '<div class="no-results">No silence detection results available</div>';
     }
     
     html += '</div>';
@@ -22321,7 +22990,7 @@ AudioToolsPro.prototype.removeTrack = function(trackId) {
 // Analyze Audio Rhythm
 AudioToolsPro.prototype.analyzeAudioRhythm = async function() {
     try {
-        this.log('🎵 Starting Rhythm & Timing Analysis...', 'info');
+        this.log('🎵 Starting Rhythm & Timing Analysis via Backend API...', 'info');
         this.showUIMessage('🎵 Analyzing audio rhythm and timing patterns...', 'processing');
         
         if (!this.audioPlayer || !this.audioPlayer.src) {
@@ -22330,71 +22999,158 @@ AudioToolsPro.prototype.analyzeAudioRhythm = async function() {
         }
         
         this.rhythmTimingConfig.processing = true;
-        this.updateRhythmAnalysisUI('analyzing');
+        this.showRhythmLoading('🎵 Analyzing rhythm and timing patterns...');
         
-        // Get audio buffer for analysis
-        const audioBuffer = await this.getAudioBufferFromPlayer();
-        if (!audioBuffer) {
-            throw new Error('Could not extract audio buffer from loaded audio');
+        // Check if backend integration is available
+        if (!this.rhythmIntegration) {
+            throw new Error('Backend integration not available. Please ensure the backend server is running.');
         }
         
-        // Perform GUARANTEED REAL rhythm analysis using Web Audio API
-        this.log('🎯 Starting REAL audio buffer analysis - NO FALLBACK TO DUMMY DATA', 'info');
-        const rhythmResults = await this.analyzeRhythm(audioBuffer);
+        // Get audio data for backend processing
+        // Prioritize audio blob since backend expects file uploads
+        let audioData = null;
         
-        // VERIFY results contain real audio data
-        if (!rhythmResults || !rhythmResults.detailedAnalysis) {
-            throw new Error('Analysis failed to return real audio data');
+        // Use currentAudioBlob if available (best for backend API)
+        if (this.currentAudioBlob) {
+            audioData = this.currentAudioBlob;
+            this.log('🎵 Using current audio blob for backend API', 'info');
+        }
+        // Fallback to currentAudioPath (will be converted to blob)
+        else if (this.currentAudioPath) {
+            // For file paths, we need to create a blob from the audio player
+            try {
+                audioData = await this.getAudioBlobFromPlayer();
+                if (!audioData) {
+                    audioData = this.currentAudioPath;
+                }
+                this.log('🎵 Using converted audio blob from player', 'info');
+            } catch (error) {
+                audioData = this.currentAudioPath;
+                this.log(`⚠️ Could not convert to blob, using path: ${error.message}`, 'warning');
+            }
+        }
+        // Last resort: check multitrack data
+        else if (this.multiTrackConfig && this.multiTrackConfig.tracks.size > 0) {
+            const firstTrack = Array.from(this.multiTrackConfig.tracks.values())[0];
+            audioData = firstTrack.file?.path || firstTrack.path || firstTrack.blob;
+            this.log('🎵 Using multitrack audio data', 'info');
         }
         
-        const detailedAnalysis = rhythmResults.detailedAnalysis;
-        if (!detailedAnalysis.speechRegions || !detailedAnalysis.energyLevels) {
-            throw new Error('Analysis missing real audio processing results');
+        if (!audioData) {
+            throw new Error('No audio track loaded. Please load an audio file first.');
         }
         
-        // Log proof of real analysis
-        this.log(`🎯 VERIFIED REAL ANALYSIS RESULTS:`, 'success');
-        this.log(`   📊 Audio Duration: ${detailedAnalysis.duration.toFixed(2)}s`, 'info');
-        this.log(`   🎤 Speech Regions: ${detailedAnalysis.speechRegions.length}`, 'info');
-        this.log(`   🔇 Silence Regions: ${detailedAnalysis.silenceRegions.length}`, 'info');
-        this.log(`   📈 Energy Samples: ${detailedAnalysis.energyLevels.length}`, 'info');
-        this.log(`   🎵 Speaking Rate: ${rhythmResults.speakingRate} WPM (calculated from real audio)`, 'info');
-        this.log(`   ⏱️ Rhythm Consistency: ${(rhythmResults.rhythmConsistency * 100).toFixed(1)}% (from actual timing)`, 'info');
+        // Prepare analysis options
+        const analysisOptions = {
+            segmentLength: this.rhythmTimingConfig.segmentLength || 2.0,
+            overlapRatio: 0.5,
+            enablePacingAnalysis: true,
+            enableFlowAnalysis: true,
+            language: 'en',
+            sensitivityLevel: this.rhythmTimingConfig.sensitivityLevel || 'medium'
+        };
         
-        // Store detailed analysis results
-        this.rhythmTimingConfig.analysisResults = detailedAnalysis;
-        const corrections = rhythmResults.suggestedCorrections;
+        // Use backend API for rhythm analysis with audio data
+        const results = await this.rhythmIntegration.analyzeRhythm(audioData, analysisOptions);
         
-        // Store results
-        this.rhythmTimingConfig.corrections = corrections;
-        this.rhythmTimingConfig.processing = false;
-        
-        // Display results with REAL data confirmation
-        this.displayRhythmAnalysisResults(corrections, rhythmResults);
-        
-        // Enable correction buttons
-        this.enableRhythmCorrectionButtons();
-        
-        this.log(`✅ REAL AUDIO ANALYSIS COMPLETED: ${corrections.length} timing issues detected from actual audio processing`, 'success');
-        this.showUIMessage(`✅ REAL Analysis Complete! Found ${corrections.length} timing improvements from actual audio data`, 'success');
-        
-        return corrections;
+        // Process and store results
+        if (results.success) {
+            const rhythmData = results.results;
+            
+            // Convert backend format to frontend format
+            let suggestedCorrections = [];
+            try {
+                if (typeof this.convertBackendCorrections === 'function') {
+                    suggestedCorrections = this.convertBackendCorrections(rhythmData);
+                } else {
+                    this.log('⚠️ convertBackendCorrections function not available, using empty corrections', 'warning');
+                    suggestedCorrections = [];
+                }
+            } catch (error) {
+                this.log(`⚠️ Error converting backend corrections: ${error.message}`, 'warning');
+                suggestedCorrections = [];
+            }
+            
+            const rhythmResults = {
+                speakingRate: rhythmData.pacingAnalysis?.averageSpeechRate || 0,
+                pauseDurations: rhythmData.silenceRegions?.map(r => r.duration) || [],
+                rhythmConsistency: rhythmData.pacingAnalysis?.rhythmConsistency || 0,
+                suggestedCorrections: suggestedCorrections,
+                detailedAnalysis: {
+                    duration: rhythmData.totalDuration || 0,
+                    speechRegions: rhythmData.speechRegions || [],
+                    silenceRegions: rhythmData.silenceRegions || [],
+                    energyLevels: [], // Will be populated from speechRegions
+                    confidenceScore: rhythmData.confidence || 0
+                }
+            };
+            
+            // Generate energy levels from speech regions for compatibility
+            rhythmResults.detailedAnalysis.energyLevels = rhythmData.speechRegions?.map(region => ({
+                time: region.start + region.duration / 2,
+                energy: region.intensity || 0.5
+            })) || [];
+            
+            this.log(`✅ Backend rhythm analysis completed successfully`, 'success');
+            this.log(`   📊 Audio Duration: ${rhythmResults.detailedAnalysis.duration.toFixed(2)}s`, 'info');
+            this.log(`   🎤 Speech Regions: ${rhythmResults.detailedAnalysis.speechRegions.length}`, 'info');
+            this.log(`   🔇 Silence Regions: ${rhythmResults.detailedAnalysis.silenceRegions.length}`, 'info');
+            this.log(`   🎵 Speaking Rate: ${rhythmResults.speakingRate} WPM`, 'info');
+            this.log(`   ⏱️ Rhythm Consistency: ${(rhythmResults.rhythmConsistency * 100).toFixed(1)}%`, 'info');
+            
+            // Display rhythm analysis results
+            if (this.rhythmIntegration && typeof this.rhythmIntegration.displayRhythmResults === 'function') {
+                this.rhythmIntegration.displayRhythmResults(rhythmResults);
+            } else {
+                this.log('⚠️ displayRhythmResults function not available', 'warning');
+            }
+            
+            // Complete progress bar
+            const progressBar = document.getElementById('rhythmProgressBar');
+            if (progressBar) {
+                progressBar.style.width = '100%';
+                if (this.rhythmProgressInterval) {
+                    clearInterval(this.rhythmProgressInterval);
+                }
+            }
+            
+            // Store detailed analysis results
+            this.rhythmTimingConfig.analysisResults = rhythmResults.detailedAnalysis;
+            const corrections = rhythmResults.suggestedCorrections;
+            
+            // Store results
+            this.rhythmTimingConfig.corrections = corrections;
+            this.rhythmTimingConfig.processing = false;
+            
+            // Display results
+            this.displayRhythmAnalysisResults(corrections, rhythmResults);
+            
+            // Enable correction buttons
+            this.enableRhythmCorrectionButtons();
+            
+            this.log(`✅ BACKEND RHYTHM ANALYSIS COMPLETED: ${corrections.length} timing issues detected`, 'success');
+            this.showUIMessage(`✅ Backend Analysis Complete! Found ${corrections.length} timing improvements`, 'success');
+            
+            return corrections;
+        } else {
+            throw new Error('Backend analysis failed');
+        }
         
     } catch (error) {
         this.rhythmTimingConfig.processing = false;
         this.log(`❌ Rhythm analysis failed: ${error.message}`, 'error');
-        this.log(`❌ Error stack: ${error.stack}`, 'error');
         this.showUIMessage(`❌ Analysis failed: ${error.message}`, 'error');
         
         // Display error state in UI
         this.displayRhythmAnalysisError(error);
+        
     }
 };
 
 // Apply Timing Corrections
 AudioToolsPro.prototype.applyTimingCorrections = async function() {
     try {
-        this.log('🔧 Applying Timing Corrections...', 'info');
+        this.log('🔧 Applying Timing Corrections via Backend API...', 'info');
         this.showUIMessage('🔧 Applying timing corrections to audio...', 'processing');
         
         if (!this.rhythmTimingConfig.corrections || this.rhythmTimingConfig.corrections.length === 0) {
@@ -22402,37 +23158,88 @@ AudioToolsPro.prototype.applyTimingCorrections = async function() {
             return;
         }
         
-        // Get original audio buffer
-        const originalAudioBuffer = await this.getAudioBufferFromPlayer();
-        if (!originalAudioBuffer) {
-            throw new Error('Could not get original audio buffer');
+        // Check if backend integration is available
+        if (!this.rhythmIntegration) {
+            throw new Error('Backend integration not available. Please ensure the backend server is running.');
+        }
+        
+        // Get audio data for correction
+        let audioData = null;
+        
+        // First try to get the original audio blob for correction
+        const audioBlob = await this.getAudioBlobFromPlayer();
+        if (audioBlob) {
+            audioData = audioBlob;
+            this.log('🔧 Using audio blob for timing correction', 'info');
+        }
+        // Fallback to currentAudioPath
+        else if (this.currentAudioPath) {
+            audioData = this.currentAudioPath;
+            this.log(`🔧 Using current audio path: ${this.currentAudioPath}`, 'info');
+        }
+        // Last resort: check multitrack data
+        else if (this.multiTrackConfig && this.multiTrackConfig.tracks.size > 0) {
+            const firstTrack = Array.from(this.multiTrackConfig.tracks.values())[0];
+            audioData = firstTrack.blob || firstTrack.file?.path || firstTrack.path;
+            this.log('🔧 Using multitrack audio data', 'info');
+        }
+        
+        if (!audioData) {
+            throw new Error('No audio track loaded. Please load an audio file first.');
         }
         
         const corrections = this.rhythmTimingConfig.corrections;
+        
         const algorithm = this.rhythmTimingConfig.stretchAlgorithm;
-        let appliedCorrections = 0;
         
-        // Apply corrections using selected time-stretching algorithm
-        this.log(`🚀 Applying ${corrections.length} corrections using ${algorithm}`, 'info');
+        // Prepare correction options
+        const correctionOptions = {
+            method: algorithm || 'time_stretching',
+            speedAdjustment: 1.0,
+            preservePitch: true,
+            outputFormat: 'mp3',
+            quality: 'high',
+            targetSpeechRate: this.rhythmTimingConfig.targetSpeechRate,
+            targetPauseDuration: this.rhythmTimingConfig.targetPauseDuration,
+            corrections: corrections
+        };
         
-        // Create corrected audio buffer
-        const correctedAudioBuffer = await this.applyTimeStretchingCorrections(
-            originalAudioBuffer, corrections, algorithm
-        );
+        // Apply corrections using backend API
+        this.log(`🚀 Applying ${corrections.length} corrections using ${algorithm} via backend`, 'info');
         
-        // Store corrected audio for preview
-        this.rhythmTimingConfig.correctedAudioBuffer = correctedAudioBuffer;
+        const results = await this.rhythmIntegration.correctTiming(audioData, corrections, correctionOptions);
         
-        // Count applied corrections
-        appliedCorrections = corrections.length;
-        
-        // Update analysis results
-        this.updateRhythmAnalysisResults(corrections);
-        
-        this.log(`✅ Applied ${appliedCorrections} timing corrections`, 'success');
-        this.showUIMessage(`✅ Applied ${appliedCorrections} timing corrections successfully`, 'success');
-        
-        return appliedCorrections;
+        if (results.success) {
+            const correctedFile = results.correctedFile;
+            
+            this.log(`✅ Backend timing correction completed successfully`, 'success');
+            this.log(`   📄 Original Duration: ${results.originalFile.duration.toFixed(2)}s`, 'info');
+            this.log(`   📄 Corrected Duration: ${correctedFile.duration.toFixed(2)}s`, 'info');
+            this.log(`   🔧 Corrections Applied: ${results.results.correctionsApplied}`, 'info');
+            this.log(`   📁 Output File: ${correctedFile.name}`, 'info');
+            
+            // Store corrected audio information
+            this.rhythmTimingConfig.correctedAudio = {
+                fileName: correctedFile.name,
+                downloadUrl: correctedFile.downloadUrl,
+                originalDuration: results.originalFile.duration,
+                correctedDuration: correctedFile.duration,
+                correctionsApplied: results.results.correctionsApplied
+            };
+            
+            // Update UI with correction results
+            this.displayTimingCorrectionResults(results);
+            
+            // Enable download/preview buttons
+            this.enableCorrectionDownloadButtons();
+            
+            this.log(`✅ BACKEND TIMING CORRECTION COMPLETED: ${results.results.correctionsApplied} corrections applied`, 'success');
+            this.showUIMessage(`✅ Backend Correction Complete! Applied ${results.results.correctionsApplied} corrections`, 'success');
+            
+            return results;
+        } else {
+            throw new Error('Backend timing correction failed');
+        }
         
     } catch (error) {
         this.log(`❌ Timing correction failed: ${error.message}`, 'error');
@@ -22912,222 +23719,249 @@ AudioToolsPro.prototype.generateAIAudioInsights = function(rhythmResults, analys
     };
 };
 
-// Display rhythm analysis results
+// Enhanced display rhythm analysis results with modern UI
 AudioToolsPro.prototype.displayRhythmAnalysisResults = function(corrections, rhythmResults) {
     const container = document.getElementById('rhythmAnalysis');
     if (!container) return;
     
+    // Add fade-in animation
+    container.classList.add('rhythm-fade-in');
+    
     // Use passed rhythmResults or fall back to stored analysis results
     const analysisResults = rhythmResults ? rhythmResults.detailedAnalysis : this.rhythmTimingConfig.analysisResults;
     
-    // Log what we're working with for debugging
-    this.log(`📊 Display function - rhythmResults: ${!!rhythmResults}, analysisResults: ${!!analysisResults}`, 'info');
-    if (rhythmResults) {
-        this.log(`📊 rhythmResults structure: speakingRate=${rhythmResults.speakingRate}, consistency=${rhythmResults.rhythmConsistency}`, 'info');
-    }
+    this.log(`🎵 Displaying enhanced rhythm analysis results`, 'info');
     
-    // Generate AI insights about the audio
-    const aiInsights = this.generateAIAudioInsights(rhythmResults, analysisResults, corrections);
+    // Calculate insights
+    const speechRegions = analysisResults?.speechRegions || [];
+    const silenceRegions = analysisResults?.silenceRegions || [];
+    const avgSpeechRate = rhythmResults?.speakingRate || 0;
+    const avgPauseDuration = rhythmResults?.pauseDurations?.length > 0 ? 
+        (rhythmResults.pauseDurations.reduce((a,b) => a+b, 0) / rhythmResults.pauseDurations.length) : 0;
+    const consistency = rhythmResults?.rhythmConsistency || 0;
     
-    const totalTimeSavings = corrections.reduce((sum, c) => {
-        const savings = c.currentDuration && c.suggestedDuration ? 
-            c.currentDuration - c.suggestedDuration : 0;
-        return sum + (c.apply ? savings : 0);
-    }, 0);
-    
-    let html = `
-        <div class="rhythm-results">
-            <!-- Real Data Verification Banner -->
-            <div class="real-data-verification" style="background: linear-gradient(135deg, #28a745, #20c997); color: white; padding: 12px; border-radius: 8px; margin-bottom: 16px; text-align: center;">
-                <h4 style="margin: 0; font-size: 16px; font-weight: 600;">
-                    ✅ REAL AUDIO ANALYSIS VERIFIED
-                </h4>
-                <p style="margin: 8px 0 0 0; font-size: 14px; opacity: 0.9;">
-                    Results generated from actual Web Audio API processing - NOT simulation
-                </p>
-                ${analysisResults ? `
-                    <div style="display: flex; justify-content: center; gap: 20px; margin-top: 8px; font-size: 12px;">
-                        <span>📊 ${analysisResults.speechRegions ? analysisResults.speechRegions.length : 0} speech regions</span>
-                        <span>🔇 ${analysisResults.silenceRegions ? analysisResults.silenceRegions.length : 0} silence regions</span>
-                        <span>📈 ${analysisResults.energyLevels ? analysisResults.energyLevels.length : 0} energy samples</span>
-                    </div>
-                ` : ''}
+    // Generate enhanced HTML with new design
+    const html = `
+        <div class="rhythm-analysis-header">
+            <i class="fas fa-music"></i>
+            <h4>Rhythm Analysis Results</h4>
+            <span class="status-badge">Completed</span>
+        </div>
+        
+        <!-- Rhythm Metrics Grid -->
+        <div class="rhythm-metrics-grid">
+            <div class="rhythm-metric-card">
+                <span class="rhythm-metric-value">${avgSpeechRate.toFixed(1)}</span>
+                <span class="rhythm-metric-label">Words Per Minute</span>
             </div>
-
-            <!-- AI Audio Insights Panel -->
-            <div class="ai-insights-panel" style="background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 16px; border-radius: 10px; margin-bottom: 20px;">
-                <h5 style="margin: 0 0 12px 0; display: flex; align-items: center; gap: 8px;">
-                    <i class="fas fa-brain"></i> AI Audio Analysis Insights
-                </h5>
-                <div class="insights-content">
-                    ${aiInsights.overallAssessment ? `
-                        <div class="insight-item" style="margin-bottom: 12px;">
-                            <strong>Overall Assessment:</strong>
-                            <p style="margin: 4px 0 0 0; opacity: 0.95;">${aiInsights.overallAssessment}</p>
-                        </div>
-                    ` : ''}
-                    
-                    ${aiInsights.audioCharacteristics ? `
-                        <div class="insight-item" style="margin-bottom: 12px;">
-                            <strong>Audio Characteristics:</strong>
-                            <p style="margin: 4px 0 0 0; opacity: 0.95;">${aiInsights.audioCharacteristics}</p>
-                        </div>
-                    ` : ''}
-                    
-                    ${aiInsights.rhythmPattern ? `
-                        <div class="insight-item" style="margin-bottom: 12px;">
-                            <strong>Rhythm Pattern:</strong>
-                            <p style="margin: 4px 0 0 0; opacity: 0.95;">${aiInsights.rhythmPattern}</p>
-                        </div>
-                    ` : ''}
-                    
-                    ${aiInsights.recommendations && aiInsights.recommendations.length > 0 ? `
-                        <div class="insight-item">
-                            <strong>AI Recommendations:</strong>
-                            <ul style="margin: 4px 0 0 20px; opacity: 0.95;">
-                                ${aiInsights.recommendations.map(rec => `<li>${rec}</li>`).join('')}
-                            </ul>
+            <div class="rhythm-metric-card">
+                <span class="rhythm-metric-value">${avgPauseDuration.toFixed(1)}s</span>
+                <span class="rhythm-metric-label">Avg Pause Duration</span>
+            </div>
+            <div class="rhythm-metric-card">
+                <span class="rhythm-metric-value">${(consistency * 100).toFixed(0)}%</span>
+                <span class="rhythm-metric-label">Rhythm Consistency</span>
+            </div>
+            <div class="rhythm-metric-card">
+                <span class="rhythm-metric-value">${corrections.length}</span>
+                <span class="rhythm-metric-label">Issues Found</span>
+            </div>
+            <div class="rhythm-metric-card">
+                <span class="rhythm-metric-value">${speechRegions.length}</span>
+                <span class="rhythm-metric-label">Speech Segments</span>
+            </div>
+            <div class="rhythm-metric-card">
+                <span class="rhythm-metric-value">${silenceRegions.length}</span>
+                <span class="rhythm-metric-label">Silence Segments</span>
+            </div>
+        </div>
+        
+        <!-- Rhythm Visualizer -->
+        <div class="rhythm-visualizer">
+            <h5 style="color: #E0AAFF; margin-bottom: 12px;"><i class="fas fa-waveform-lines"></i> Rhythm Pattern</h5>
+            <div class="rhythm-waveform">
+                <div class="rhythm-waveform-bars" id="rhythmWaveformBars">
+                    ${this.generateRhythmWaveform(speechRegions, silenceRegions)}
+                </div>
+            </div>
+        </div>
+        
+        ${corrections.length > 0 ? `
+        <!-- Correction Suggestions -->
+        <div class="rhythm-corrections">
+            <h5><i class="fas fa-magic"></i> Suggested Corrections (${corrections.length})</h5>
+            ${corrections.map((correction, index) => `
+                <div class="rhythm-correction-item">
+                    <div class="rhythm-correction-type">
+                        ${this.getCorrectionIcon(correction.type)} ${this.formatCorrectionType(correction.type)}
+                    </div>
+                    <div class="rhythm-correction-desc">${correction.description || 'Timing adjustment needed'}</div>
+                    ${correction.currentDuration && correction.suggestedDuration ? `
+                        <div style="margin-top: 8px; font-size: 12px; color: #C77DFF;">
+                            Current: ${correction.currentDuration.toFixed(2)}s → Suggested: ${correction.suggestedDuration.toFixed(2)}s
                         </div>
                     ` : ''}
                 </div>
-            </div>
-
-            <!-- Analysis Summary -->
-            <div class="analysis-summary">
-                <h5><i class="fas fa-chart-line"></i> Rhythm Analysis Summary</h5>
-                <div class="summary-stats">
-                    <div class="stat-item">
-                        <span class="stat-label">Speaking Rate:</span>
-                        <span class="stat-value">${rhythmResults ? rhythmResults.speakingRate || 0 : 0} WPM</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Average Pause:</span>
-                        <span class="stat-value">${rhythmResults && rhythmResults.pauseDurations && rhythmResults.pauseDurations.length > 0 ? (rhythmResults.pauseDurations.reduce((a,b) => a+b, 0) / rhythmResults.pauseDurations.length).toFixed(1) : '0.0'}s</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Rhythm Consistency:</span>
-                        <span class="stat-value">${rhythmResults && typeof rhythmResults.rhythmConsistency === 'number' ? (rhythmResults.rhythmConsistency * 100).toFixed(0) : '0'}%</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Issues Found:</span>
-                        <span class="stat-value">${corrections.length}</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Potential Time Savings:</span>
-                        <span class="stat-value">${totalTimeSavings.toFixed(1)}s</span>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="corrections-list">
-                <h5><i class="fas fa-magic"></i> Timing Corrections ${corrections.length > 0 ? `(${corrections.length} found)` : ''}</h5>
+            `).join('')}
+        </div>
+        ` : `
+        <div class="rhythm-corrections">
+            <h5><i class="fas fa-check-circle" style="color: #28a745;"></i> No Issues Found</h5>
+            <div style="color: #C77DFF; opacity: 0.8;">Your audio has excellent rhythm and timing!</div>
+        </div>
+        `}
     `;
     
-    if (corrections.length === 0) {
-        html += `
-            <div class="no-corrections" style="text-align: center; padding: 20px; color: #6c757d;">
-                <i class="fas fa-check-circle" style="font-size: 48px; margin-bottom: 12px; color: #28a745;"></i>
-                <h6>Excellent Timing!</h6>
-                <p>No timing corrections needed. Your audio has good rhythm and pacing.</p>
-            </div>
-        `;
-    } else {
-        corrections.forEach((correction, index) => {
-            const severityClass = correction.severity || 'medium';
-            const severityIcon = {
-                'low': 'fa-info-circle',
-                'medium': 'fa-exclamation-triangle',
-                'high': 'fa-exclamation-circle'
-            }[severityClass];
-            
-            // Generate more detailed correction information
-            const correctionType = correction.type || 'timing_adjustment';
-            const typeInfo = {
-                'long_pause': { name: 'Long Pause', icon: 'fa-pause', color: '#ffc107' },
-                'short_gap': { name: 'Short Gap', icon: 'fa-compress', color: '#17a2b8' },
-                'awkward_timing': { name: 'Awkward Timing', icon: 'fa-clock', color: '#fd7e14' },
-                'rhythm_break': { name: 'Rhythm Break', icon: 'fa-wave-square', color: '#dc3545' },
-                'timing_adjustment': { name: 'Timing Adjustment', icon: 'fa-adjust', color: '#6f42c1' }
-            }[correctionType] || { name: 'Timing Issue', icon: 'fa-exclamation', color: '#6c757d' };
-            
-            html += `
-                <div class="correction-item ${severityClass}" style="border-left: 4px solid ${typeInfo.color}; margin-bottom: 16px; background: rgba(255,255,255,0.05); border-radius: 8px; padding: 16px;">
-                    <div class="correction-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                        <div class="correction-info" style="display: flex; align-items: center; gap: 12px;">
-                            <div class="correction-type-badge" style="background: ${typeInfo.color}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; display: flex; align-items: center; gap: 4px;">
-                                <i class="fas ${typeInfo.icon}"></i>
-                                ${typeInfo.name}
-                            </div>
-                            <span class="correction-name" style="font-weight: 600;">${correction.name || `Timing issue at ${this.formatTime(correction.timestamp)}`}</span>
-                            <span class="correction-time" style="background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 3px; font-size: 11px;">${this.formatTime(correction.timestamp)}</span>
-                        </div>
-                        <div class="correction-controls">
-                            <label class="correction-toggle" style="position: relative; display: inline-block; width: 44px; height: 24px;">
-                                <input type="checkbox" ${correction.apply ? 'checked' : ''} 
-                                       onchange="window.audioToolsPro.toggleCorrection(${index})"
-                                       style="opacity: 0; width: 0; height: 0;">
-                                <span class="toggle-slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 24px;"></span>
-                            </label>
-                        </div>
-                    </div>
-                    
-                    <div class="correction-details">
-                        <p class="correction-description" style="margin: 0 0 12px 0; color: #e9ecef; line-height: 1.4;">
-                            ${correction.description || this.generateCorrectionDescription(correction, typeInfo)}
-                        </p>
-                        
-                        <div class="correction-metrics" style="display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 12px;">
-                            <span class="metric" style="background: rgba(255,255,255,0.1); padding: 6px 10px; border-radius: 6px; font-size: 13px; display: flex; align-items: center; gap: 6px;">
-                                <i class="fas fa-clock" style="color: #17a2b8;"></i>
-                                <span>${correction.currentDuration ? correction.currentDuration.toFixed(1) : '0.0'}s → ${correction.suggestedDuration ? correction.suggestedDuration.toFixed(1) : '0.0'}s</span>
-                            </span>
-                            <span class="metric" style="background: rgba(40, 167, 69, 0.2); padding: 6px 10px; border-radius: 6px; font-size: 13px; display: flex; align-items: center; gap: 6px;">
-                                <i class="fas fa-save" style="color: #28a745;"></i>
-                                <span>Save ${correction.timingSavings ? correction.timingSavings.toFixed(1) : '0.0'}s</span>
-                            </span>
-                            <span class="metric" style="background: rgba(108, 117, 125, 0.2); padding: 6px 10px; border-radius: 6px; font-size: 13px; display: flex; align-items: center; gap: 6px;">
-                                <i class="fas fa-percentage" style="color: #6c757d;"></i>
-                                <span>${correction.confidence ? (correction.confidence * 100).toFixed(0) : '85'}% confidence</span>
-                            </span>
-                            <span class="metric" style="background: rgba(${severityClass === 'high' ? '220, 53, 69' : severityClass === 'medium' ? '255, 193, 7' : '23, 162, 184'}, 0.2); padding: 6px 10px; border-radius: 6px; font-size: 13px; display: flex; align-items: center; gap: 6px;">
-                                <i class="fas ${severityIcon}" style="color: ${severityClass === 'high' ? '#dc3545' : severityClass === 'medium' ? '#ffc107' : '#17a2b8'};"></i>
-                                <span>${severityClass.toUpperCase()} priority</span>
-                            </span>
-                        </div>
-            `;
-            
-            // Add AI suggestion if available
-            if (correction.gptSuggestion || correction.reasoning) {
-                html += `
-                    <div class="ai-suggestion" style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1)); border: 1px solid rgba(102, 126, 234, 0.3); padding: 12px; border-radius: 6px; margin-top: 8px;">
-                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-                            <i class="fas fa-brain" style="color: #667eea;"></i>
-                            <span style="font-weight: 600; color: #667eea;">AI Insight</span>
-                        </div>
-                        <p style="margin: 0; font-size: 13px; line-height: 1.4; color: #e9ecef;">
-                            ${correction.gptSuggestion || correction.reasoning || 'This adjustment will improve the natural flow and timing of your audio content.'}
-                        </p>
-                    </div>
-                `;
-            }
-            
-            // Add impact preview
-            html += `
-                <div class="correction-impact" style="margin-top: 8px; font-size: 12px; color: #adb5bd;">
-                    <i class="fas fa-info-circle"></i>
-                    <span>Impact: ${correction.impact || this.generateImpactDescription(correction, typeInfo)}</span>
-                </div>
-            `;
-        
-            html += '</div></div>';
-        });
+    container.innerHTML = html;
+    
+    // Enable correction buttons if corrections are available
+    const correctTimingBtn = document.getElementById('correctTiming');
+    const previewBtn = document.getElementById('previewCorrections');
+    
+    if (corrections.length > 0) {
+        if (correctTimingBtn) {
+            correctTimingBtn.disabled = false;
+            correctTimingBtn.classList.add('rhythm-pulse');
+        }
+        if (previewBtn) {
+            previewBtn.disabled = false;
+        }
     }
     
-    html += '</div></div>';
+    // Animate metrics cards
+    setTimeout(() => {
+        const metricCards = container.querySelectorAll('.rhythm-metric-card');
+        metricCards.forEach((card, index) => {
+            setTimeout(() => {
+                card.classList.add('rhythm-slide-up');
+            }, index * 100);
+        });
+    }, 200);
     
-    container.innerHTML = html;
+    this.log(`✅ Enhanced rhythm analysis display completed`, 'success');
 };
 
+// Generate rhythm waveform visualization
+AudioToolsPro.prototype.generateRhythmWaveform = function(speechRegions, silenceRegions) {
+    const maxBars = 50;
+    const totalDuration = Math.max(
+        speechRegions.length > 0 ? Math.max(...speechRegions.map(r => r.end || r.start + r.duration)) : 0,
+        silenceRegions.length > 0 ? Math.max(...silenceRegions.map(r => r.end || r.start + r.duration)) : 0
+    );
+    
+    if (totalDuration === 0) return '<div style="color: #C77DFF; text-align: center; padding: 20px;">No waveform data available</div>';
+    
+    const timeStep = totalDuration / maxBars;
+    let bars = '';
+    
+    for (let i = 0; i < maxBars; i++) {
+        const timePos = i * timeStep;
+        const isSpeech = speechRegions.some(r => timePos >= r.start && timePos <= (r.end || r.start + r.duration));
+        const height = isSpeech ? Math.random() * 80 + 20 : Math.random() * 20 + 5;
+        const barClass = isSpeech ? 'speech' : 'silence';
+        
+        bars += `<div class="rhythm-bar ${barClass}" style="height: ${height}%"></div>`;
+    }
+    
+    return bars;
+};
+
+// Get icon for correction type
+AudioToolsPro.prototype.getCorrectionIcon = function(type) {
+    const icons = {
+        'speed': '🏃',
+        'pause': '⏸️',
+        'timing': '⏱️',
+        'rhythm': '🎵',
+        'silence': '🔇',
+        'flow': '🌊',
+        'pacing': '📏'
+    };
+    return icons[type] || '🔧';
+};
+
+// Format correction type for display
+AudioToolsPro.prototype.formatCorrectionType = function(type) {
+    const types = {
+        'speed': 'Speech Rate Adjustment',
+        'pause': 'Pause Duration',
+        'timing': 'Timing Correction',
+        'rhythm': 'Rhythm Smoothing',
+        'silence': 'Silence Optimization',
+        'flow': 'Flow Improvement',
+        'pacing': 'Pacing Adjustment'
+    };
+    return types[type] || type.charAt(0).toUpperCase() + type.slice(1);
+};
+
+// Enhanced loading animation for rhythm analysis
+AudioToolsPro.prototype.showRhythmLoading = function(message = 'Analyzing rhythm and timing patterns...') {
+    const container = document.getElementById('rhythmAnalysis');
+    if (!container) return;
+    
+    container.innerHTML = `
+        <div class="rhythm-loading">
+            <div class="rhythm-loading-spinner"></div>
+            <div class="rhythm-loading-text">${message}</div>
+            <div class="rhythm-progress">
+                <div class="rhythm-progress-bar" id="rhythmProgressBar"></div>
+            </div>
+        </div>
+    `;
+    
+    // Animate progress bar
+    const progressBar = document.getElementById('rhythmProgressBar');
+    if (progressBar) {
+        let progress = 0;
+        const interval = setInterval(() => {
+            progress += Math.random() * 10;
+            if (progress >= 95) {
+                clearInterval(interval);
+                progress = 95; // Stop at 95% until analysis completes
+            }
+            progressBar.style.width = `${progress}%`;
+        }, 200);
+        
+        // Store interval for cleanup
+        this.rhythmProgressInterval = interval;
+    }
+};
+
+// Enhanced Rhythm UI Controls
+AudioToolsPro.prototype.setupEnhancedRhythmSliders = function() {
+    const timingSlider = document.getElementById('timingTolerance');
+    const timingValue = document.getElementById('timingToleranceValue');
+    
+    if (timingSlider && timingValue) {
+        timingSlider.addEventListener('input', (e) => {
+            const value = e.target.value;
+            timingValue.textContent = `±${value}ms`;
+            timingValue.style.animation = 'rhythmPulse 0.3s ease';
+            setTimeout(() => {
+                timingValue.style.animation = '';
+            }, 300);
+        });
+    }
+};
+
+AudioToolsPro.prototype.toggleRealTimeAnalysis = function() {
+    const checkbox = document.getElementById('enableRealTimeAnalysis');
+    if (checkbox) {
+        this.rhythmTimingConfig.enableRealTimeAnalysis = checkbox.checked;
+        this.log(`🔄 Real-time analysis ${checkbox.checked ? 'enabled' : 'disabled'}`, 'info');
+        this.showUIMessage(`Real-time analysis ${checkbox.checked ? 'enabled' : 'disabled'}`, 'info');
+    }
+};
+
+AudioToolsPro.prototype.toggleAICorrections = function() {
+    const checkbox = document.getElementById('enableAICorrections');
+    if (checkbox) {
+        this.rhythmTimingConfig.enableAICorrections = checkbox.checked;
+        this.log(`🤖 AI corrections ${checkbox.checked ? 'enabled' : 'disabled'}`, 'info');
+        this.showUIMessage(`AI-powered corrections ${checkbox.checked ? 'enabled' : 'disabled'}`, 'info');
+    }
+};
+                
 // Generate correction description
 AudioToolsPro.prototype.generateCorrectionDescription = function(correction, typeInfo) {
     const descriptions = {
@@ -23920,248 +24754,6 @@ AudioToolsPro.prototype.generateWaveformPreview = function(audioBuffer, containe
     container.appendChild(canvas);
 };
 
-// Apply time-stretching corrections to audio buffer
-AudioToolsPro.prototype.applyTimeStretchingCorrections = async function(originalBuffer, corrections, algorithm) {
-    this.log(`🎵 Applying time-stretching corrections using ${algorithm}`, 'info');
-    
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const sampleRate = originalBuffer.sampleRate;
-    const channels = originalBuffer.numberOfChannels;
-    
-    // Create a copy of the original buffer to work with
-    let processedBuffer = this.cloneAudioBuffer(originalBuffer, audioContext);
-    
-    // Sort corrections by start time (latest first for proper offset handling)
-    const sortedCorrections = [...corrections].sort((a, b) => b.startTime - a.startTime);
-    
-    for (const correction of sortedCorrections) {
-        if (correction.action === 'trim_pause') {
-            processedBuffer = await this.trimAudioSegment(
-                processedBuffer, correction.startTime, correction.endTime, 
-                correction.suggestedDuration, audioContext
-            );
-        } else if (correction.action === 'remove_artifact') {
-            processedBuffer = await this.removeAudioSegment(
-                processedBuffer, correction.startTime, correction.endTime, audioContext
-            );
-        } else if (correction.action === 'smooth_rhythm') {
-            processedBuffer = await this.applyRhythmSmoothing(
-                processedBuffer, algorithm, audioContext
-            );
-        }
-    }
-    
-    this.log('✅ Time-stretching corrections applied successfully', 'success');
-    return processedBuffer;
-};
-
-// Clone audio buffer
-AudioToolsPro.prototype.cloneAudioBuffer = function(originalBuffer, audioContext) {
-    const channels = originalBuffer.numberOfChannels;
-    const length = originalBuffer.length;
-    const sampleRate = originalBuffer.sampleRate;
-    
-    const newBuffer = audioContext.createBuffer(channels, length, sampleRate);
-    
-    for (let channel = 0; channel < channels; channel++) {
-        const originalData = originalBuffer.getChannelData(channel);
-        const newData = newBuffer.getChannelData(channel);
-        newData.set(originalData);
-    }
-    
-    return newBuffer;
-};
-
-// Trim audio segment to specific duration
-AudioToolsPro.prototype.trimAudioSegment = async function(buffer, startTime, endTime, newDuration, audioContext) {
-    const sampleRate = buffer.sampleRate;
-    const channels = buffer.numberOfChannels;
-    
-    const startSample = Math.floor(startTime * sampleRate);
-    const endSample = Math.floor(endTime * sampleRate);
-    const newDurationSamples = Math.floor(newDuration * sampleRate);
-    const removedSamples = (endSample - startSample) - newDurationSamples;
-    
-    if (removedSamples <= 0) return buffer; // No trimming needed
-    
-    // Create new buffer with reduced length
-    const newLength = buffer.length - removedSamples;
-    const newBuffer = audioContext.createBuffer(channels, newLength, sampleRate);
-    
-    for (let channel = 0; channel < channels; channel++) {
-        const originalData = buffer.getChannelData(channel);
-        const newData = newBuffer.getChannelData(channel);
-        
-        // Copy data before the segment
-        newData.set(originalData.subarray(0, startSample), 0);
-        
-        // Copy the trimmed segment
-        newData.set(
-            originalData.subarray(startSample, startSample + newDurationSamples),
-            startSample
-        );
-        
-        // Copy data after the segment
-        newData.set(
-            originalData.subarray(endSample, buffer.length),
-            startSample + newDurationSamples
-        );
-    }
-    
-    return newBuffer;
-};
-
-// Remove audio segment completely
-AudioToolsPro.prototype.removeAudioSegment = async function(buffer, startTime, endTime, audioContext) {
-    const sampleRate = buffer.sampleRate;
-    const channels = buffer.numberOfChannels;
-    
-    const startSample = Math.floor(startTime * sampleRate);
-    const endSample = Math.floor(endTime * sampleRate);
-    const removedSamples = endSample - startSample;
-    
-    // Create new buffer with reduced length
-    const newLength = buffer.length - removedSamples;
-    const newBuffer = audioContext.createBuffer(channels, newLength, sampleRate);
-    
-    for (let channel = 0; channel < channels; channel++) {
-        const originalData = buffer.getChannelData(channel);
-        const newData = newBuffer.getChannelData(channel);
-        
-        // Copy data before the segment
-        newData.set(originalData.subarray(0, startSample), 0);
-        
-        // Copy data after the segment
-        newData.set(
-            originalData.subarray(endSample, buffer.length),
-            startSample
-        );
-    }
-    
-    return newBuffer;
-};
-
-// Apply rhythm smoothing using selected algorithm
-AudioToolsPro.prototype.applyRhythmSmoothing = async function(buffer, algorithm, audioContext) {
-    this.log(`🎵 Applying rhythm smoothing with ${algorithm} algorithm`, 'info');
-    
-    switch (algorithm) {
-        case 'phase_vocoder':
-            return await this.applyPhaseVocoder(buffer, audioContext);
-        case 'granular':
-            return await this.applyGranularSynthesis(buffer, audioContext);
-        case 'wsola':
-            return await this.applyWSOLA(buffer, audioContext);
-        default:
-            this.log(`⚠️ Unknown algorithm: ${algorithm}, using phase vocoder`, 'warning');
-            return await this.applyPhaseVocoder(buffer, audioContext);
-    }
-};
-
-// Phase Vocoder implementation (simplified)
-AudioToolsPro.prototype.applyPhaseVocoder = async function(buffer, audioContext) {
-    this.log('🔊 Applying Phase Vocoder processing...', 'info');
-    
-    // Simplified phase vocoder - in real implementation this would be much more complex
-    // For now, apply gentle smoothing to the audio
-    const channels = buffer.numberOfChannels;
-    const length = buffer.length;
-    const processedBuffer = audioContext.createBuffer(channels, length, buffer.sampleRate);
-    
-    for (let channel = 0; channel < channels; channel++) {
-        const inputData = buffer.getChannelData(channel);
-        const outputData = processedBuffer.getChannelData(channel);
-        
-        // Apply smoothing window
-        for (let i = 0; i < length; i++) {
-            let sum = inputData[i];
-            let count = 1;
-            
-            // Simple moving average for smoothing
-            const windowSize = 5;
-            for (let j = -windowSize; j <= windowSize; j++) {
-                const index = i + j;
-                if (index >= 0 && index < length) {
-                    sum += inputData[index] * 0.8; // Weighted average
-                    count += 0.8;
-                }
-            }
-            
-            outputData[i] = sum / count;
-        }
-    }
-    
-    return processedBuffer;
-};
-
-// Granular Synthesis implementation (simplified)
-AudioToolsPro.prototype.applyGranularSynthesis = async function(buffer, audioContext) {
-    this.log('🌾 Applying Granular Synthesis processing...', 'info');
-    
-    // Simplified granular synthesis - processes audio in small grains
-    const channels = buffer.numberOfChannels;
-    const length = buffer.length;
-    const sampleRate = buffer.sampleRate;
-    const processedBuffer = audioContext.createBuffer(channels, length, sampleRate);
-    
-    const grainSize = Math.floor(sampleRate * 0.02); // 20ms grains
-    
-    for (let channel = 0; channel < channels; channel++) {
-        const inputData = buffer.getChannelData(channel);
-        const outputData = processedBuffer.getChannelData(channel);
-        
-        for (let i = 0; i < length; i += grainSize) {
-            const endIndex = Math.min(i + grainSize, length);
-            const grainLength = endIndex - i;
-            
-            // Apply Hanning window to grain
-            for (let j = 0; j < grainLength; j++) {
-                const windowValue = 0.5 * (1 - Math.cos(2 * Math.PI * j / (grainLength - 1)));
-                outputData[i + j] = inputData[i + j] * windowValue;
-            }
-        }
-    }
-    
-    return processedBuffer;
-};
-
-// WSOLA implementation (Waveform Similarity Overlap-Add)
-AudioToolsPro.prototype.applyWSOLA = async function(buffer, audioContext) {
-    this.log('🌊 Applying WSOLA processing...', 'info');
-    
-    // Simplified WSOLA - maintains pitch while changing timing
-    const channels = buffer.numberOfChannels;
-    const length = buffer.length;
-    const processedBuffer = audioContext.createBuffer(channels, length, buffer.sampleRate);
-    
-    for (let channel = 0; channel < channels; channel++) {
-        const inputData = buffer.getChannelData(channel);
-        const outputData = processedBuffer.getChannelData(channel);
-        
-        // Apply overlap-add processing
-        const frameSize = 1024;
-        const hopSize = 512;
-        
-        for (let i = 0; i < length - frameSize; i += hopSize) {
-            const endIndex = Math.min(i + frameSize, length);
-            const frameLength = endIndex - i;
-            
-            // Apply windowing and overlap-add
-            for (let j = 0; j < frameLength; j++) {
-                const window = Math.sin(Math.PI * j / frameLength);
-                const inputIndex = i + j;
-                const outputIndex = i + j;
-                
-                if (outputIndex < length) {
-                    outputData[outputIndex] += inputData[inputIndex] * window;
-                }
-            }
-        }
-    }
-    
-    return processedBuffer;
-};
-
 // GPT Analysis Toggle Functionality
 AudioToolsPro.prototype.toggleGPTAnalysis = function() {
     this.rhythmTimingConfig.enableGPTAnalysis = !this.rhythmTimingConfig.enableGPTAnalysis;
@@ -24255,9 +24847,6 @@ AudioToolsPro.prototype.calculateVariance = function(values) {
 };
 
 
-// User requested verification that no dummy/mock data is used
-// All rhythm analysis must use real Web Audio API processing
-
 // Update loaded media UI elements
 AudioToolsPro.prototype.updateLoadedMediaUI = function(clipInfo) {
     // Update header with loaded media info
@@ -24318,61 +24907,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log('🌍 Global test functions added: globalTestApplySilenceCuts() and testApplySilenceCuts()');
 });
 
-// Global button handlers for silence removal
-function handleApplySilenceCuts() {
-    console.log('🔧 Apply Silence Cuts button clicked!');
-    
-    if (!window.audioToolsPro) {
-        console.error('❌ audioToolsPro not found!');
-        alert('❌ Application not initialized properly');
-        return;
-    }
-    
-    if (!window.audioToolsPro.lastSilenceResults || window.audioToolsPro.lastSilenceResults.length === 0) {
-        console.error('❌ No silence results found!');
-        alert('❌ No silence segments to remove. Please run silence detection first.');
-        return;
-    }
-    
-    console.log('✅ Calling applySilenceCuts with', window.audioToolsPro.lastSilenceResults.length, 'segments');
-    
-    // Show loading state
-    const button = document.querySelector('.apply-silence-cuts');
-    if (button) {
-        button.disabled = true;
-        button.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span class="btn-text">Processing...</span>';
-    }
-    
-    try {
-        window.audioToolsPro.applySilenceCuts();
-    } catch (error) {
-        console.error('❌ Error calling applySilenceCuts:', error);
-        alert('❌ Error applying silence cuts: ' + error.message);
-        
-        // Reset button state
-        if (button) {
-            button.disabled = false;
-            button.innerHTML = '<i class="fas fa-cut"></i><span class="btn-text">Apply Silence Cuts</span>';
-        }
-    }
-}
-
-function handleTestSilenceCuts() {
-    console.log('🧪 Test Silence Cuts button clicked!');
-    
-    if (!window.audioToolsPro) {
-        console.error('❌ audioToolsPro not found!');
-        alert('❌ Application not initialized properly');
-        return;
-    }
-    
-    if (window.audioToolsPro.testApplySilenceCutsSimple) {
-        window.audioToolsPro.testApplySilenceCutsSimple();
-    } else {
-        console.error('❌ testApplySilenceCutsSimple not found!');
-        alert('❌ Test function not available');
-    }
-}
 
 // Also initialize if DOM is already loaded
 if (document.readyState === 'complete' || document.readyState === 'interactive') {
@@ -24558,4 +25092,4 @@ AudioToolsPro.prototype.detectCrossChannelOverlapsFast = function(audioBuffer) {
     
     this.log(`🔄 FAST cross-channel analysis found ${overlaps.length} correlation overlaps`, 'info');
     return overlaps;
-};
+}

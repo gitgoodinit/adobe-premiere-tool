@@ -37,11 +37,28 @@ const upload = multer({
         files: 6 // Maximum 6 tracks as per specification
     },
     fileFilter: (req, file, cb) => {
-        const allowedTypes = ['audio/mpeg', 'audio/wav', 'audio/mp3', 'audio/m4a', 'audio/ogg'];
-        if (allowedTypes.includes(file.mimetype)) {
+        // More comprehensive audio file type checking
+        const allowedTypes = [
+            'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/wave', 'audio/x-wav',
+            'audio/m4a', 'audio/mp4', 'audio/aac', 'audio/x-m4a',
+            'audio/ogg', 'audio/vorbis', 'audio/webm',
+            'audio/flac', 'audio/x-flac',
+            'video/mp4', 'video/quicktime', 'video/x-msvideo', // Allow video files as they contain audio
+            'application/octet-stream' // Sometimes audio files are sent as binary
+        ];
+        
+        // Also check file extension as fallback
+        const fileExtension = file.originalname ? file.originalname.toLowerCase() : '';
+        const allowedExtensions = ['.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac', '.mp4', '.mov', '.avi'];
+        const hasValidExtension = allowedExtensions.some(ext => fileExtension.endsWith(ext));
+        
+        console.log(`File validation - Name: ${file.originalname}, MIME: ${file.mimetype}, Valid Extension: ${hasValidExtension}`);
+        
+        if (allowedTypes.includes(file.mimetype) || hasValidExtension) {
             cb(null, true);
         } else {
-            cb(new Error('Invalid file type. Only audio files are allowed.'), false);
+            console.error(`Rejected file - Name: ${file.originalname}, MIME: ${file.mimetype}`);
+            cb(new Error(`Invalid file type. Only audio files are allowed. Received: ${file.mimetype}`), false);
         }
     }
 });
