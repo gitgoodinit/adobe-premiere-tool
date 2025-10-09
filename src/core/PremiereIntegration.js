@@ -617,7 +617,204 @@ class PremiereIntegration {
                     // Fade addition failed, but not critical
                 }
             }
+            
+            // Import audio file into Premiere Pro project
+            function importAudioFile(filePath) {
+                try {
+                    var seq = app.project.activeSequence;
+                    if (!seq) {
+                        return JSON.stringify({success: false, error: "No active sequence"});
+                    }
+                    
+                    // Import the audio file into the project
+                    var projectItem = app.project.importFiles([filePath], true, app.project.rootItem, false);
+                    
+                    if (!projectItem || projectItem.length === 0) {
+                        return JSON.stringify({success: false, error: "Failed to import audio file"});
+                    }
+                    
+                    var importedItem = projectItem[0];
+                    var clipName = importedItem.name;
+                    
+                    return JSON.stringify({
+                        success: true,
+                        clipName: clipName,
+                        projectItem: importedItem.name,
+                        duration: importedItem.getFootageInterpretation().frameRate ? 
+                                 importedItem.getFootageInterpretation().frameRate : 0
+                    });
+                    
+                } catch (error) {
+                    return JSON.stringify({success: false, error: error.toString()});
+                }
+            }
+            
+            // Replace audio clip with trimmed version
+            function replaceAudioClipWithTrimmed(params) {
+                try {
+                    var seq = app.project.activeSequence;
+                    if (!seq) {
+                        return JSON.stringify({success: false, error: "No active sequence"});
+                    }
+                    
+                    var replacedClips = 0;
+                    var newClipName = params.newClipName;
+                    
+                    // Find the imported audio clip in the project
+                    var newAudioClip = null;
+                    for (var i = 0; i < app.project.rootItem.children.numItems; i++) {
+                        var item = app.project.rootItem.children[i];
+                        if (item.name === newClipName && item.type === ProjectItemType.CLIP) {
+                            newAudioClip = item;
+                            break;
+                        }
+                    }
+                    
+                    if (!newAudioClip) {
+                        return JSON.stringify({success: false, error: "Trimmed audio clip not found in project"});
+                    }
+                    
+                    // Find and replace audio clips in the timeline
+                    for (var trackIndex = 0; trackIndex < seq.audioTracks.numTracks; trackIndex++) {
+                        var track = seq.audioTracks[trackIndex];
+                        
+                        for (var clipIndex = 0; clipIndex < track.clips.numItems; clipIndex++) {
+                            var clip = track.clips[clipIndex];
+                            
+                            // Check if this is an audio clip that needs replacement
+                            if (clip.mediaType === "Audio") {
+                                // Store the original position and properties
+                                var originalStart = clip.start.ticks;
+                                var originalEnd = clip.end.ticks;
+                                var originalInPoint = clip.inPoint.ticks;
+                                var originalOutPoint = clip.outPoint.ticks;
+                                
+                                // Remove the original clip
+                                clip.remove(false, false); // Don't ripple delete
+                                
+                                // Insert the new trimmed audio clip
+                                var newClip = track.insertClip(newAudioClip, originalStart);
+                                
+                                if (newClip) {
+                                    // Adjust the clip to match the original timing
+                                    newClip.start.ticks = originalStart;
+                                    
+                                    // If the trimmed audio is shorter, adjust the end point
+                                    if (params.trimmedDuration < params.originalDuration) {
+                                        var durationDifference = params.originalDuration - params.trimmedDuration;
+                                        var durationDifferenceTicks = seq.timebase * durationDifference;
+                                        newClip.end.ticks = originalEnd - durationDifferenceTicks;
+                                    } else {
+                                        newClip.end.ticks = originalEnd;
+                                    }
+                                    
+                                    replacedClips++;
+                                }
+                            }
+                        }
+                    }
+                    
+                    return JSON.stringify({
+                        success: true,
+                        replacedClips: replacedClips,
+                        newClipName: newClipName
+                    });
+                    
+                } catch (error) {
+                    return JSON.stringify({success: false, error: error.toString()});
+                }
+            }
         `;
+    }
+
+    // ========================================
+    // AUDIO REPLACEMENT FUNCTIONALITY
+    // ========================================
+
+    async replaceAudioInTimeline(trimResponse) {
+        this.app.log('🔄 Replacing audio in timeline with trimmed version...', 'info');
+        
+        try {
+            // Get the trimmed audio file path from the backend response
+            const trimmedAudioPath = trimResponse.trimmedFile.path || trimResponse.outputPath;
+            if (!trimmedAudioPath) {
+                throw new Error('No trimmed audio file path available');
+            }
+
+            // Import the trimmed audio into Premiere Pro
+            const importResult = await this.importAudioFile(trimmedAudioPath);
+            
+            // Replace the original audio clip with the trimmed version
+            const replacementResult = await this.replaceAudioClip(importResult, trimResponse);
+            
+            this.app.log('✅ Audio replacement completed successfully', 'success');
+            
+            return {
+                success: true,
+                originalDuration: trimResponse.originalFile.duration,
+                trimmedDuration: trimResponse.trimmedFile.duration,
+                timeSaved: trimResponse.results.timeSaved,
+                newClipName: importResult.clipName,
+                replacedClips: replacementResult.replacedClips
+            };
+            
+        } catch (error) {
+            this.app.log(`❌ Audio replacement failed: ${error.message}`, 'error');
+            throw error;
+        }
+    }
+
+    async importAudioFile(audioFilePath) {
+        this.app.log(`📁 Importing audio file: ${audioFilePath}`, 'info');
+        
+        return new Promise((resolve, reject) => {
+            const importScript = `
+                importAudioFile("${audioFilePath.replace(/\\/g, '\\\\')}")
+            `;
+            
+            this.csInterface.evalScript(importScript, (result) => {
+                try {
+                    const importResult = JSON.parse(result);
+                    if (importResult.success) {
+                        this.app.log(`✅ Audio imported: ${importResult.clipName}`, 'success');
+                        resolve(importResult);
+                    } else {
+                        reject(new Error(importResult.error || 'Failed to import audio file'));
+                    }
+                } catch (error) {
+                    reject(new Error('Failed to parse import result'));
+                }
+            });
+        });
+    }
+
+    async replaceAudioClip(importResult, trimResponse) {
+        this.app.log(`🔄 Replacing audio clip with trimmed version...`, 'info');
+        
+        return new Promise((resolve, reject) => {
+            const replacementScript = `
+                replaceAudioClipWithTrimmed({
+                    newClipName: "${importResult.clipName}",
+                    originalDuration: ${trimResponse.originalFile.duration},
+                    trimmedDuration: ${trimResponse.trimmedFile.duration},
+                    preserveTiming: true
+                })
+            `;
+            
+            this.csInterface.evalScript(replacementScript, (result) => {
+                try {
+                    const replacementResult = JSON.parse(result);
+                    if (replacementResult.success) {
+                        this.app.log(`✅ Replaced ${replacementResult.replacedClips} audio clips`, 'success');
+                        resolve(replacementResult);
+                    } else {
+                        reject(new Error(replacementResult.error || 'Failed to replace audio clip'));
+                    }
+                } catch (error) {
+                    reject(new Error('Failed to parse replacement result'));
+                }
+            });
+        });
     }
 
     // ========================================

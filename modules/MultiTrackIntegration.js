@@ -22,13 +22,15 @@ class MultiTrackIntegration {
      * Get backend URL from configuration or environment
      */
     getBackendURL() {
-        // In CEP environment, always use HTTP for backend communication
-        if (typeof window !== 'undefined' && window.__adobe_cep__) {
-            return 'http://localhost:3000/api/multitrack';
+        // Use centralized environment configuration
+        if (window.envConfig) {
+            return window.envConfig.getApiEndpoint('multitrack');
         }
         
-        // Default development configuration
-        return 'http://localhost:3000/api/multitrack';
+        // Fallback for when envConfig is not available
+        const storedPort = localStorage.getItem('audioToolsBackendPort');
+        const port = storedPort || '3000';
+        return `http://localhost:${port}/api/multitrack`;
     }
 
     /**

@@ -12,6 +12,7 @@ const rateLimit = require('express-rate-limit');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const net = require('net');
 require('dotenv').config();
 
 // Import route modules
@@ -30,6 +31,30 @@ const validation = require('./src/middleware/validation');
 // Import services and utilities
 const CacheService = require('./src/services/cacheService');
 const Logger = require('./src/utils/logger');
+
+// Utility function to find an available port
+function findAvailablePort(startPort = 3000, maxPort = 9999) {
+    return new Promise((resolve, reject) => {
+        const server = net.createServer();
+        
+        server.listen(startPort, () => {
+            const port = server.address().port;
+            server.close(() => resolve(port));
+        });
+        
+        server.on('error', (err) => {
+            if (err.code === 'EADDRINUSE') {
+                if (startPort < maxPort) {
+                    findAvailablePort(startPort + 1, maxPort).then(resolve).catch(reject);
+                } else {
+                    reject(new Error(`No available ports found between ${startPort} and ${maxPort}`));
+                }
+            } else {
+                reject(err);
+            }
+        });
+    });
+}
 
 
 class AudioToolsBackend {
@@ -51,14 +76,14 @@ class AudioToolsBackend {
             this.config = JSON.parse(configData);
             
             // Apply configuration with environment variable overrides
-            this.port = process.env.PORT || this.config.server?.port || 3000;
+            this.preferredPort = process.env.PORT || this.config.server?.port || 3000;
             this.host = process.env.HOST || this.config.server?.host || 'localhost';
             this.allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || this.config.server?.allowedOrigins || ['http://localhost:3000', 'http://localhost:8080'];
             
         } catch (error) {
             console.warn('Failed to load configuration, using defaults:', error.message);
             this.config = {};
-            this.port = process.env.PORT || 3000;
+            this.preferredPort = process.env.PORT || 3000;
             this.host = process.env.HOST || 'localhost';
             this.allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000', 'http://localhost:8080'];
         }
@@ -208,16 +233,65 @@ class AudioToolsBackend {
         });
     }
 
+    updateAllowedOrigins() {
+        // Add the actual port to allowed origins
+        const newOrigin = `http://${this.host}:${this.port}`;
+        if (!this.allowedOrigins.includes(newOrigin)) {
+            this.allowedOrigins.push(newOrigin);
+        }
+        
+        // Update CORS configuration
+        this.app.use(cors({
+            origin: this.allowedOrigins,
+            credentials: true,
+            methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+            allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+        }));
+    }
+
+    savePortToFile() {
+        try {
+            const portInfo = {
+                port: this.port,
+                host: this.host,
+                baseURL: `http://${this.host}:${this.port}`,
+                timestamp: new Date().toISOString()
+            };
+            
+            const portFilePath = path.join(__dirname, 'config', 'current-port.json');
+            fs.writeFileSync(portFilePath, JSON.stringify(portInfo, null, 2));
+            this.logger.info(`💾 Port information saved to ${portFilePath}`);
+        } catch (error) {
+            this.logger.warn(`⚠️ Failed to save port information: ${error.message}`);
+        }
+    }
+
     async start() {
         try {
             // Initialize services
             await this.cache.initialize();
 
+            // Find an available port
+            this.logger.info(`🔍 Looking for available port starting from ${this.preferredPort}...`);
+            this.port = await findAvailablePort(this.preferredPort);
+            
+            if (this.port !== this.preferredPort) {
+                this.logger.info(`⚠️ Port ${this.preferredPort} is busy, using port ${this.port} instead`);
+            } else {
+                this.logger.info(`✅ Using preferred port ${this.port}`);
+            }
+
+            // Update allowed origins to include the actual port
+            this.updateAllowedOrigins();
+
             // Start server
-            this.app.listen(this.port, this.host, () => {
+            this.server = this.app.listen(this.port, this.host, () => {
                 this.logger.info(`🚀 Audio Tools Pro Backend Server running on ${this.host}:${this.port}`);
                 this.logger.info(`📚 API Documentation: http://${this.host}:${this.port}/api/docs`);
                 this.logger.info(`🏥 Health Check: http://${this.host}:${this.port}/api/health`);
+                
+                // Save the actual port to a file for frontend to read
+                this.savePortToFile();
             });
 
             // Graceful shutdown
@@ -234,12 +308,32 @@ class AudioToolsBackend {
         this.logger.info('🛑 Shutting down server...');
         
         try {
+            // Close the server
+            if (this.server) {
+                this.server.close();
+            }
+            
+            // Clean up port file
+            this.cleanupPortFile();
+            
             await this.cache.cleanup();
             this.logger.info('✅ Server shutdown complete');
             process.exit(0);
         } catch (error) {
             this.logger.error('❌ Error during shutdown:', error);
             process.exit(1);
+        }
+    }
+
+    cleanupPortFile() {
+        try {
+            const portFilePath = path.join(__dirname, 'config', 'current-port.json');
+            if (fs.existsSync(portFilePath)) {
+                fs.unlinkSync(portFilePath);
+                this.logger.info('🗑️ Port file cleaned up');
+            }
+        } catch (error) {
+            this.logger.warn(`⚠️ Failed to cleanup port file: ${error.message}`);
         }
     }
 }

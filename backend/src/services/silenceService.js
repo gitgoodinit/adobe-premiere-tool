@@ -66,7 +66,7 @@ class SilenceService {
             // Web Audio API detection (simulated)
             if (options.methods?.includes('webAudio')) {
                 this.updateJobProgress(jobId, 60);
-                const webAudioResults = SilenceCore.detectWithWebAudio(audioInfo, options);
+                const webAudioResults = await SilenceCore.detectWithWebAudio(filePath, options);
                 results.silenceSegments.push(...webAudioResults);
                 results.methods.push('webAudio');
             }

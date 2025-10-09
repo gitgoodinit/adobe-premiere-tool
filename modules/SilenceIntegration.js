@@ -7,9 +7,20 @@
 class SilenceIntegration {
     constructor(parentApp) {
         this.parentApp = parentApp;
-        this.baseUrl = 'http://localhost:3000/api/silence';
+        this.baseUrl = this.getBaseUrl();
         this.maxRetries = 3;
         this.retryDelay = 1000;
+    }
+
+    getBaseUrl() {
+        if (window.envConfig) {
+            return window.envConfig.getApiEndpoint('silence');
+        }
+        
+        // Fallback for when envConfig is not available
+        const storedPort = localStorage.getItem('audioToolsBackendPort');
+        const port = storedPort || '3000';
+        return `http://localhost:${port}/api/silence`;
     }
 
     /**

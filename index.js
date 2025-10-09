@@ -983,12 +983,41 @@ class AudioToolsPro {
         try {
             this.log('🚀 Initializing Enhanced Features...', 'info');
             
+            // Discover backend port dynamically
+            await this.discoverBackendPort();
+            
+            // Test the environment configuration
+            await this.testEnvironmentConfiguration();
+            
             // Check if enhanced feature files are available
             if (typeof require !== 'undefined') {
                 try {
                     // Try to load enhanced features
                     const EnhancedFeatureManager = require('./src/core/EnhancedFeatureManager');
                     const EnhancedSilenceResultsIntegration = require('./src/ui/EnhancedSilenceResultsIntegration');
+                    
+                    // Initialize PremiereIntegration
+                    try {
+                        this.log('🔧 Attempting to load PremiereIntegration module...', 'info');
+                        const PremiereIntegration = require('./src/core/PremiereIntegration');
+                        this.log('🔧 PremiereIntegration module loaded successfully', 'info');
+                        this.premiereIntegration = new PremiereIntegration(this);
+                        this.log('🎬 Premiere Pro integration initialized', 'success');
+                    } catch (error) {
+                        this.log(`⚠️ PremiereIntegration not available: ${error.message}`, 'warning');
+                        this.log(`⚠️ PremiereIntegration error details: ${error.stack}`, 'warning');
+                        this.premiereIntegration = null;
+                    }
+                    
+                    // Initialize SilenceIntegration
+                    try {
+                        const SilenceIntegration = require('./modules/SilenceIntegration');
+                        this.silenceIntegration = new SilenceIntegration(this);
+                        this.log('🔇 Silence Integration module initialized', 'success');
+                    } catch (error) {
+                        this.log(`⚠️ SilenceIntegration not available: ${error.message}`, 'warning');
+                        this.silenceIntegration = null;
+                    }
                     
                     // Initialize enhanced features
                     this.enhancedFeatures = new EnhancedFeatureManager(this);
@@ -3588,17 +3617,92 @@ class AudioToolsPro {
     
     // Get backend URL based on environment
     getBackendUrl() {
-        // In development, use localhost
+        // Use the centralized environment configuration
+        if (window.envConfig) {
+            return window.envConfig.getBackendUrl();
+        }
+        
+        // Fallback for when envConfig is not available
         const isDevelopment = window.location.hostname === 'localhost' || 
                             window.location.hostname === '127.0.0.1' ||
                             window.location.hostname === '';
         
         if (isDevelopment) {
-            return 'http://localhost:3000';
+            const storedPort = localStorage.getItem('audioToolsBackendPort');
+            if (storedPort) {
+                return `http://localhost:${storedPort}`;
+            }
+            return window.envConfig ? window.envConfig.getBackendUrl() : 'http://localhost:3000';
         }
         
-        // In production, use relative URL or configured backend
-        return this.settings?.backendUrl || 'http://localhost:3000';
+        return this.settings?.backendUrl || (window.envConfig ? window.envConfig.getBackendUrl() : 'http://localhost:3000');
+    }
+
+    // Discover backend port dynamically
+    async discoverBackendPort() {
+        const startPort = window.envConfig ? window.envConfig.config.backend.defaultPort : 3000;
+        const maxPort = window.envConfig ? window.envConfig.config.backend.maxPort : 3010;
+        
+        for (let port = startPort; port <= maxPort; port++) {
+            try {
+                const healthUrl = `http://localhost:${port}/api/health`;
+                const response = await fetch(healthUrl, {
+                    method: 'GET',
+                    timeout: 1000
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.status === 'healthy' || data.name === 'Audio Tools Pro Backend API') {
+                        // Store the working port in both localStorage and envConfig
+                        localStorage.setItem('audioToolsBackendPort', port.toString());
+                        if (window.envConfig) {
+                            window.envConfig.setBackendPort(port);
+                        }
+                        this.log(`🔍 Discovered backend on port ${port}`, 'info');
+                        return port;
+                    }
+                }
+            } catch (error) {
+                // Port is not available, continue to next
+                continue;
+            }
+        }
+        
+        this.log('⚠️ Could not discover backend port, using default 3000', 'warning');
+        return startPort;
+    }
+
+    // Test environment configuration
+    async testEnvironmentConfiguration() {
+        try {
+            this.log('🧪 Testing environment configuration...', 'info');
+            
+            if (window.envConfig) {
+                const backendUrl = window.envConfig.getBackendUrl();
+                const apiUrl = window.envConfig.getApiUrl();
+                const healthUrl = window.envConfig.getHealthUrl();
+                
+                this.log(`✅ Environment config loaded:`, 'success');
+                this.log(`   Backend URL: ${backendUrl}`, 'info');
+                this.log(`   API URL: ${apiUrl}`, 'info');
+                this.log(`   Health URL: ${healthUrl}`, 'info');
+                
+                // Test backend connectivity
+                if (window.urlHelper) {
+                    const connectionTest = await window.urlHelper.testBackendConnection();
+                    if (connectionTest.connected) {
+                        this.log(`✅ Backend connection test passed on port ${connectionTest.port}`, 'success');
+                    } else {
+                        this.log(`⚠️ Backend connection test failed: ${connectionTest.error}`, 'warning');
+                    }
+                }
+            } else {
+                this.log('⚠️ Environment configuration not available', 'warning');
+            }
+        } catch (error) {
+            this.log(`❌ Environment configuration test failed: ${error.message}`, 'error');
+        }
     }
 
     async runBasicSilenceDetection() {
@@ -3797,6 +3901,47 @@ class AudioToolsPro {
 
     
     // Send audio to backend trimming API
+    // Replace audio in timeline with trimmed version
+    async replaceAudioInTimeline(trimResponse) {
+        try {
+            this.log('🔄 Replacing audio in timeline with trimmed version...', 'info');
+            
+            // Debug: Check what's available
+            this.log(`🔧 Debug - this.premiereIntegration: ${this.premiereIntegration}`, 'info');
+            this.log(`🔧 Debug - typeof this.premiereIntegration: ${typeof this.premiereIntegration}`, 'info');
+            
+            // Check if Premiere integration is available
+            if (!this.premiereIntegration) {
+                this.log('❌ PremiereIntegration is null/undefined', 'error');
+                this.log('🔄 Using fallback approach - creating timeline markers only', 'info');
+                
+                // Fallback: Just create markers and provide download option
+                const fallbackResult = {
+                    success: true,
+                    originalDuration: trimResponse.originalFile.duration,
+                    trimmedDuration: trimResponse.trimmedFile.duration,
+                    timeSaved: trimResponse.results.timeSaved,
+                    newClipName: 'Trimmed Audio (Download Available)',
+                    replacedClips: 0,
+                    fallback: true
+                };
+                
+                this.log('✅ Fallback audio replacement completed (markers only)', 'success');
+                return fallbackResult;
+            }
+            
+            // Use PremiereIntegration to replace the audio
+            const replacementResult = await this.premiereIntegration.replaceAudioInTimeline(trimResponse);
+            
+            this.log('✅ Audio replacement completed successfully', 'success');
+            return replacementResult;
+            
+        } catch (error) {
+            this.log(`❌ Audio replacement failed: ${error.message}`, 'error');
+            throw error;
+        }
+    }
+
     // Send audio to backend trimming API via SilenceIntegration module
     async sendAudioToTrimmingApi(silenceSegments, trimmingOptions = {}) {
         try {
@@ -4411,20 +4556,34 @@ class AudioToolsPro {
         // Store for download functionality
         this.lastTrimResponse = trimResponse;
         
-        this.updateProgress('Generating timeline markers...', 60);            // Step 2: Create timeline markers in Premiere Pro for the silence cuts
-            const timelineMarkersResult = await this.createTimelineMarkersForSilenceCuts(this.lastSilenceResults);
-            
-            this.updateProgress('Finalizing integration...', 90);
-            
-            // Step 3: Update UI with results
-            this.displaySilenceCutsResults({
-                trimResponse,
-                timelineMarkersResult,
-                silenceSegments: this.lastSilenceResults
-            });
+        this.updateProgress('Importing trimmed audio...', 40);
+        
+        // Step 2: Import trimmed audio into Premiere Pro and replace original
+        const audioReplacementResult = await this.replaceAudioInTimeline(trimResponse);
+        
+        this.updateProgress('Generating timeline markers...', 60);
+        
+        // Step 3: Create timeline markers in Premiere Pro for the silence cuts
+        const timelineMarkersResult = await this.createTimelineMarkersForSilenceCuts(this.lastSilenceResults);
+        
+        this.updateProgress('Finalizing integration...', 90);
+        
+        // Step 4: Update UI with results
+        this.displaySilenceCutsResults({
+            trimResponse,
+            audioReplacementResult,
+            timelineMarkersResult,
+            silenceSegments: this.lastSilenceResults
+        });
             
             this.updateProgress('Silence cuts applied', 100);
-            this.showUIMessage(`✅ Applied ${this.lastSilenceResults.length} silence cuts with timeline markers!`, 'success');
+            
+            // Show appropriate success message based on whether audio was replaced or fallback was used
+            if (audioReplacementResult && audioReplacementResult.fallback) {
+                this.showUIMessage(`✅ Applied ${this.lastSilenceResults.length} silence cuts with timeline markers! Download trimmed audio below.`, 'success');
+            } else {
+                this.showUIMessage(`✅ Applied ${this.lastSilenceResults.length} silence cuts and replaced audio in timeline!`, 'success');
+            }
             
             this.log(`✅ Silence cuts application completed successfully`, 'success');
             
@@ -4440,13 +4599,14 @@ class AudioToolsPro {
          this.log('📊 Displaying silence cuts results...', 'info');
          
          try {
-             const { trimResponse, timelineMarkersResult, silenceSegments } = data;
+             const { trimResponse, audioReplacementResult, timelineMarkersResult, silenceSegments } = data;
              
              // Show success summary
              const summary = `
                  <div class="silence-cuts-results">
                      <div class="results-header">
-                         <h3><i class="fas fa-check-circle text-success"></i> Silence Cuts Applied Successfully!</h3>
+                         <h3><i class="fas fa-check-circle text-success"></i> Silence Cuts Applied & Audio Replaced!</h3>
+                         <p class="results-description">The original audio has been replaced with the trimmed version in your Premiere Pro timeline.</p>
                      </div>
                      <div class="results-summary">
                          <div class="summary-item">
@@ -4466,10 +4626,81 @@ class AudioToolsPro {
                              <span class="value">${trimResponse.originalDuration && trimResponse.trimmedDuration ? this.formatTime(trimResponse.originalDuration - trimResponse.trimmedDuration) : 'N/A'}</span>
                          </div>
                          <div class="summary-item">
+                             <span class="label">Audio Clips Replaced:</span>
+                             <span class="value">${audioReplacementResult ? audioReplacementResult.replacedClips || 0 : 0}</span>
+                         </div>
+                         <div class="summary-item">
+                             <span class="label">${audioReplacementResult && audioReplacementResult.fallback ? 'Status:' : 'New Clip Name:'}</span>
+                             <span class="value">${audioReplacementResult ? audioReplacementResult.newClipName || 'N/A' : 'N/A'}</span>
+                         </div>
+                         ${audioReplacementResult && audioReplacementResult.fallback ? 
+                             '<div class="summary-item"><span class="label">Note:</span><span class="value">Timeline markers created - download trimmed audio below</span></div>' : 
+                             ''
+                         }
+                         <div class="summary-item">
                              <span class="label">Timeline Markers:</span>
                              <span class="value">${timelineMarkersResult.markersCreated || 0} created</span>
                          </div>
                      </div>
+                     
+                     <!-- Audio Player Section -->
+                     <div class="trimmed-audio-player-section">
+                         <div class="player-header">
+                             <h5><i class="fas fa-play-circle"></i> Trimmed Audio Player</h5>
+                             <div class="player-status" id="silenceCutsPlayerStatus">Ready to play</div>
+                         </div>
+                         
+                         <div class="audio-player-container">
+                             <audio id="silenceCutsAudioPlayer" preload="metadata" style="display: none;">
+                                 Your browser does not support the audio element.
+                             </audio>
+                             
+                             <div class="player-controls">
+                                 <button class="player-btn primary" id="silenceCutsPlayPauseBtn" title="Play/Pause">
+                                     <i class="fas fa-play"></i>
+                                 </button>
+                                 <button class="player-btn" id="silenceCutsStopBtn" title="Stop">
+                                     <i class="fas fa-stop"></i>
+                                 </button>
+                                 <button class="player-btn" id="silenceCutsRewindBtn" title="Rewind 10s">
+                                     <i class="fas fa-backward"></i>
+                                 </button>
+                                 <button class="player-btn" id="silenceCutsForwardBtn" title="Forward 10s">
+                                     <i class="fas fa-forward"></i>
+                                 </button>
+                                 
+                                 <div class="volume-control">
+                                     <button class="player-btn" id="silenceCutsMuteBtn" title="Mute/Unmute">
+                                         <i class="fas fa-volume-up"></i>
+                                     </button>
+                                     <input type="range" id="silenceCutsVolumeSlider" min="0" max="100" value="70" class="volume-slider">
+                                 </div>
+                                 
+                                 <div class="speed-control">
+                                     <button class="player-btn" id="silenceCutsSpeedBtn" title="Playback Speed">
+                                         <span class="speed-text">1x</span>
+                                     </button>
+                                 </div>
+                             </div>
+                             
+                             <div class="player-progress-container">
+                                 <div class="progress-bar" id="silenceCutsProgressBar">
+                                     <div class="progress-fill" id="silenceCutsProgressFill"></div>
+                                     <div class="progress-handle" id="silenceCutsProgressHandle"></div>
+                                 </div>
+                                 <div class="time-display">
+                                     <span class="current-time" id="silenceCutsCurrentTime">0:00</span>
+                                     <span class="total-time" id="silenceCutsTotalTime">${trimResponse.trimmedDuration ? this.formatTime(trimResponse.trimmedDuration) : '0:00'}</span>
+                                 </div>
+                             </div>
+                             
+                             <div class="waveform-container">
+                                 <canvas id="silenceCutsWaveformCanvas" height="80"></canvas>
+                                 <div class="waveform-overlay" id="silenceCutsWaveformOverlay"></div>
+                             </div>
+                         </div>
+                     </div>
+                     
                      <div class="results-actions">
                          <button class="btn-primary" onclick="window.audioToolsPro && window.audioToolsPro.downloadTrimmedAudio && window.audioToolsPro.downloadTrimmedAudio()">
                              <i class="fas fa-download"></i> Download Trimmed Audio
@@ -4478,12 +4709,15 @@ class AudioToolsPro {
                  </div>
              `;
              
-             // Update the results area
-             const resultsArea = document.getElementById('resultsArea');
-             if (resultsArea) {
-                 resultsArea.innerHTML = summary;
-                 resultsArea.style.display = 'block';
-             }
+            // Update the results area
+            const resultsArea = document.getElementById('silenceResults');
+            if (resultsArea) {
+                resultsArea.innerHTML = summary;
+                resultsArea.style.display = 'block';
+            }
+             
+             // Initialize the silence cuts audio player
+             this.initializeSilenceCutsAudioPlayer(trimResponse);
              
              // Show in appropriate tab
              this.activateResultsTab('silence');
@@ -4517,7 +4751,8 @@ class AudioToolsPro {
                  
              } else {
                  // Fallback: request download from backend
-                 const response = await fetch('http://localhost:3000/api/silence/download-last', {
+                 const downloadUrl = window.envConfig ? window.envConfig.getApiEndpoint('silence') + '/download-last' : 'http://localhost:3000/api/silence/download-last';
+                const response = await fetch(downloadUrl, {
                      method: 'GET'
                  });
                  
@@ -4692,6 +4927,64 @@ class AudioToolsPro {
                      </div>
                  </div>
                  
+                 <!-- Audio Player Section -->
+                 <div class="trimmed-audio-player-section">
+                     <div class="player-header">
+                         <h5><i class="fas fa-play-circle"></i> Trimmed Audio Player</h5>
+                         <div class="player-status" id="trimmedPlayerStatus">Ready to play</div>
+                     </div>
+                     
+                     <div class="audio-player-container">
+                         <audio id="trimmedAudioPlayer" preload="metadata" style="display: none;">
+                             Your browser does not support the audio element.
+                         </audio>
+                         
+                         <div class="player-controls">
+                             <button class="player-btn primary" id="trimmedPlayPauseBtn" title="Play/Pause">
+                                 <i class="fas fa-play"></i>
+                             </button>
+                             <button class="player-btn" id="trimmedStopBtn" title="Stop">
+                                 <i class="fas fa-stop"></i>
+                             </button>
+                             <button class="player-btn" id="trimmedRewindBtn" title="Rewind 10s">
+                                 <i class="fas fa-backward"></i>
+                             </button>
+                             <button class="player-btn" id="trimmedForwardBtn" title="Forward 10s">
+                                 <i class="fas fa-forward"></i>
+                             </button>
+                             
+                             <div class="volume-control">
+                                 <button class="player-btn" id="trimmedMuteBtn" title="Mute/Unmute">
+                                     <i class="fas fa-volume-up"></i>
+                                 </button>
+                                 <input type="range" id="trimmedVolumeSlider" min="0" max="100" value="70" class="volume-slider">
+                             </div>
+                             
+                             <div class="speed-control">
+                                 <button class="player-btn" id="trimmedSpeedBtn" title="Playback Speed">
+                                     <span class="speed-text">1x</span>
+                                 </button>
+                             </div>
+                         </div>
+                         
+                         <div class="player-progress-container">
+                             <div class="progress-bar" id="trimmedProgressBar">
+                                 <div class="progress-fill" id="trimmedProgressFill"></div>
+                                 <div class="progress-handle" id="trimmedProgressHandle"></div>
+                             </div>
+                             <div class="time-display">
+                                 <span class="current-time" id="trimmedCurrentTime">0:00</span>
+                                 <span class="total-time" id="trimmedTotalTime">${this.formatTime(result.newDuration)}</span>
+                             </div>
+                         </div>
+                         
+                         <div class="waveform-container">
+                             <canvas id="trimmedWaveformCanvas" height="80"></canvas>
+                             <div class="waveform-overlay" id="trimmedWaveformOverlay"></div>
+                         </div>
+                     </div>
+                 </div>
+                 
                  <div class="audio-timeline">
                      <h5><i class="fas fa-clock"></i> New Audio Timeline (Silence Removed)</h5>
                      <div class="timeline-container scrollable-timeline">
@@ -4742,6 +5035,11 @@ class AudioToolsPro {
         // Activate the silence tab
         this.activateResultsTab('silence');
         
+        // Initialize trimmed audio player
+        console.log('🔧 Initializing trimmed audio player...');
+        this.initializeTrimmedAudioPlayer(result);
+        console.log('🔧 Audio player initialized successfully');
+        
         // Render new timeline
         console.log('🔧 Rendering new timeline...');
         this.renderNewSilenceFreeTimeline(result);
@@ -4752,6 +5050,457 @@ class AudioToolsPro {
         this.showUIMessage('✅ Silence removal complete! Your audio is now silence-free.', 'success');
         console.log('🔧 displaySilenceRemovalResults completed successfully');
      }
+     
+    // Initialize trimmed audio player
+    initializeTrimmedAudioPlayer(result) {
+        console.log('🎵 Initializing trimmed audio player with result:', result);
+        
+        const audioPlayer = document.getElementById('trimmedAudioPlayer');
+        const playPauseBtn = document.getElementById('trimmedPlayPauseBtn');
+        const stopBtn = document.getElementById('trimmedStopBtn');
+        const rewindBtn = document.getElementById('trimmedRewindBtn');
+        const forwardBtn = document.getElementById('trimmedForwardBtn');
+        const muteBtn = document.getElementById('trimmedMuteBtn');
+        const volumeSlider = document.getElementById('trimmedVolumeSlider');
+        const speedBtn = document.getElementById('trimmedSpeedBtn');
+        const progressBar = document.getElementById('trimmedProgressBar');
+        const progressFill = document.getElementById('trimmedProgressFill');
+        const progressHandle = document.getElementById('trimmedProgressHandle');
+        const currentTimeSpan = document.getElementById('trimmedCurrentTime');
+        const totalTimeSpan = document.getElementById('trimmedTotalTime');
+        const statusSpan = document.getElementById('trimmedPlayerStatus');
+        const waveformCanvas = document.getElementById('trimmedWaveformCanvas');
+        
+        if (!audioPlayer) {
+            console.log('❌ Trimmed audio player element not found');
+            return;
+        }
+        
+        // Set up audio source if available
+        if (result.trimmedFile && result.trimmedFile.downloadUrl) {
+            // Backend provides a download URL
+            const baseUrl = this.getBackendBaseUrl();
+            const fullUrl = `${baseUrl}${result.trimmedFile.downloadUrl}`;
+            audioPlayer.src = fullUrl;
+            console.log('🎵 Set audio source to backend URL:', fullUrl);
+        } else if (result.trimmedAudioUrl) {
+            audioPlayer.src = result.trimmedAudioUrl;
+            console.log('🎵 Set audio source to:', result.trimmedAudioUrl);
+        } else if (result.trimmedAudioBlob) {
+            const audioUrl = URL.createObjectURL(result.trimmedAudioBlob);
+            audioPlayer.src = audioUrl;
+            console.log('🎵 Set audio source from blob');
+        } else {
+            console.log('⚠️ No trimmed audio source available');
+            statusSpan.textContent = 'No audio source available';
+            return;
+        }
+        
+        // Player state
+        let isPlaying = false;
+        let currentSpeed = 1;
+        const speeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
+        let speedIndex = 2; // Start at 1x speed
+        
+        // Update time display
+        const updateTimeDisplay = () => {
+            const current = audioPlayer.currentTime || 0;
+            const total = audioPlayer.duration || 0;
+            currentTimeSpan.textContent = this.formatTime(current);
+            totalTimeSpan.textContent = this.formatTime(total);
+        };
+        
+        // Update progress bar
+        const updateProgress = () => {
+            const current = audioPlayer.currentTime || 0;
+            const total = audioPlayer.duration || 0;
+            if (total > 0) {
+                const progress = (current / total) * 100;
+                progressFill.style.width = `${progress}%`;
+                progressHandle.style.left = `${progress}%`;
+            }
+        };
+        
+        // Update play/pause button
+        const updatePlayPauseButton = () => {
+            const icon = playPauseBtn.querySelector('i');
+            if (isPlaying) {
+                icon.className = 'fas fa-pause';
+                statusSpan.textContent = 'Playing';
+            } else {
+                icon.className = 'fas fa-play';
+                statusSpan.textContent = 'Paused';
+            }
+        };
+        
+        // Play/Pause functionality
+        playPauseBtn.addEventListener('click', () => {
+            if (isPlaying) {
+                audioPlayer.pause();
+                isPlaying = false;
+            } else {
+                audioPlayer.play();
+                isPlaying = true;
+            }
+            updatePlayPauseButton();
+        });
+        
+        // Stop functionality
+        stopBtn.addEventListener('click', () => {
+            audioPlayer.pause();
+            audioPlayer.currentTime = 0;
+            isPlaying = false;
+            updatePlayPauseButton();
+            updateProgress();
+            updateTimeDisplay();
+        });
+        
+        // Rewind 10 seconds
+        rewindBtn.addEventListener('click', () => {
+            audioPlayer.currentTime = Math.max(0, audioPlayer.currentTime - 10);
+        });
+        
+        // Forward 10 seconds
+        forwardBtn.addEventListener('click', () => {
+            const newTime = Math.min(audioPlayer.duration, audioPlayer.currentTime + 10);
+            audioPlayer.currentTime = newTime;
+        });
+        
+        // Volume control
+        volumeSlider.addEventListener('input', (e) => {
+            const volume = e.target.value / 100;
+            audioPlayer.volume = volume;
+            const icon = muteBtn.querySelector('i');
+            if (volume === 0) {
+                icon.className = 'fas fa-volume-mute';
+            } else if (volume < 0.5) {
+                icon.className = 'fas fa-volume-down';
+            } else {
+                icon.className = 'fas fa-volume-up';
+            }
+        });
+        
+        // Mute toggle
+        muteBtn.addEventListener('click', () => {
+            if (audioPlayer.volume > 0) {
+                audioPlayer.volume = 0;
+                volumeSlider.value = 0;
+                muteBtn.querySelector('i').className = 'fas fa-volume-mute';
+            } else {
+                audioPlayer.volume = 0.7;
+                volumeSlider.value = 70;
+                muteBtn.querySelector('i').className = 'fas fa-volume-up';
+            }
+        });
+        
+        // Speed control
+        speedBtn.addEventListener('click', () => {
+            speedIndex = (speedIndex + 1) % speeds.length;
+            currentSpeed = speeds[speedIndex];
+            audioPlayer.playbackRate = currentSpeed;
+            speedBtn.querySelector('.speed-text').textContent = `${currentSpeed}x`;
+        });
+        
+        // Progress bar click to seek
+        progressBar.addEventListener('click', (e) => {
+            const rect = progressBar.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const percentage = clickX / rect.width;
+            const newTime = percentage * audioPlayer.duration;
+            audioPlayer.currentTime = newTime;
+        });
+        
+        // Audio event listeners
+        audioPlayer.addEventListener('loadedmetadata', () => {
+            console.log('🎵 Audio metadata loaded');
+            updateTimeDisplay();
+            statusSpan.textContent = 'Ready to play';
+            // Generate waveform if canvas is available
+            this.generateWaveform(waveformCanvas, audioPlayer);
+        });
+        
+        audioPlayer.addEventListener('timeupdate', () => {
+            updateProgress();
+            updateTimeDisplay();
+        });
+        
+        audioPlayer.addEventListener('ended', () => {
+            isPlaying = false;
+            updatePlayPauseButton();
+            statusSpan.textContent = 'Playback complete';
+        });
+        
+        audioPlayer.addEventListener('play', () => {
+            isPlaying = true;
+            updatePlayPauseButton();
+        });
+        
+        audioPlayer.addEventListener('pause', () => {
+            isPlaying = false;
+            updatePlayPauseButton();
+        });
+        
+        audioPlayer.addEventListener('error', (e) => {
+            console.error('🎵 Audio player error:', e);
+            statusSpan.textContent = 'Error loading audio';
+        });
+        
+        // Initialize volume
+        audioPlayer.volume = 0.7;
+        volumeSlider.value = 70;
+        
+        console.log('🎵 Trimmed audio player initialized successfully');
+    }
+    
+    // Initialize silence cuts audio player
+    initializeSilenceCutsAudioPlayer(trimResponse) {
+        console.log('🎵 Initializing silence cuts audio player with response:', trimResponse);
+        
+        const audioPlayer = document.getElementById('silenceCutsAudioPlayer');
+        const playPauseBtn = document.getElementById('silenceCutsPlayPauseBtn');
+        const stopBtn = document.getElementById('silenceCutsStopBtn');
+        const rewindBtn = document.getElementById('silenceCutsRewindBtn');
+        const forwardBtn = document.getElementById('silenceCutsForwardBtn');
+        const muteBtn = document.getElementById('silenceCutsMuteBtn');
+        const volumeSlider = document.getElementById('silenceCutsVolumeSlider');
+        const speedBtn = document.getElementById('silenceCutsSpeedBtn');
+        const progressBar = document.getElementById('silenceCutsProgressBar');
+        const progressFill = document.getElementById('silenceCutsProgressFill');
+        const progressHandle = document.getElementById('silenceCutsProgressHandle');
+        const currentTimeSpan = document.getElementById('silenceCutsCurrentTime');
+        const totalTimeSpan = document.getElementById('silenceCutsTotalTime');
+        const statusSpan = document.getElementById('silenceCutsPlayerStatus');
+        const waveformCanvas = document.getElementById('silenceCutsWaveformCanvas');
+        
+        if (!audioPlayer) {
+            console.log('❌ Silence cuts audio player element not found');
+            return;
+        }
+        
+        // Set up audio source if available
+        if (trimResponse && trimResponse.trimmedFile && trimResponse.trimmedFile.downloadUrl) {
+            // Backend provides a download URL
+            const baseUrl = this.getBackendBaseUrl();
+            const fullUrl = `${baseUrl}${trimResponse.trimmedFile.downloadUrl}`;
+            audioPlayer.src = fullUrl;
+            console.log('🎵 Set silence cuts audio source to backend URL:', fullUrl);
+        } else if (trimResponse && trimResponse.downloadUrl) {
+            // Direct download URL
+            audioPlayer.src = trimResponse.downloadUrl;
+            console.log('🎵 Set silence cuts audio source to:', trimResponse.downloadUrl);
+        } else {
+            console.log('⚠️ No silence cuts audio source available');
+            statusSpan.textContent = 'No audio source available';
+            return;
+        }
+        
+        // Player state
+        let isPlaying = false;
+        let currentSpeed = 1;
+        const speeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
+        let speedIndex = 2; // Start at 1x speed
+        
+        // Update time display
+        const updateTimeDisplay = () => {
+            const current = audioPlayer.currentTime || 0;
+            const total = audioPlayer.duration || 0;
+            currentTimeSpan.textContent = this.formatTime(current);
+            totalTimeSpan.textContent = this.formatTime(total);
+        };
+        
+        // Update progress bar
+        const updateProgress = () => {
+            const current = audioPlayer.currentTime || 0;
+            const total = audioPlayer.duration || 0;
+            if (total > 0) {
+                const progress = (current / total) * 100;
+                progressFill.style.width = `${progress}%`;
+                progressHandle.style.left = `${progress}%`;
+            }
+        };
+        
+        // Update play/pause button
+        const updatePlayPauseButton = () => {
+            const icon = playPauseBtn.querySelector('i');
+            if (isPlaying) {
+                icon.className = 'fas fa-pause';
+                statusSpan.textContent = 'Playing';
+            } else {
+                icon.className = 'fas fa-play';
+                statusSpan.textContent = 'Paused';
+            }
+        };
+        
+        // Play/Pause functionality
+        playPauseBtn.addEventListener('click', () => {
+            if (isPlaying) {
+                audioPlayer.pause();
+                isPlaying = false;
+            } else {
+                audioPlayer.play();
+                isPlaying = true;
+            }
+            updatePlayPauseButton();
+        });
+        
+        // Stop functionality
+        stopBtn.addEventListener('click', () => {
+            audioPlayer.pause();
+            audioPlayer.currentTime = 0;
+            isPlaying = false;
+            updatePlayPauseButton();
+            updateProgress();
+            updateTimeDisplay();
+        });
+        
+        // Rewind 10 seconds
+        rewindBtn.addEventListener('click', () => {
+            audioPlayer.currentTime = Math.max(0, audioPlayer.currentTime - 10);
+        });
+        
+        // Forward 10 seconds
+        forwardBtn.addEventListener('click', () => {
+            const newTime = Math.min(audioPlayer.duration, audioPlayer.currentTime + 10);
+            audioPlayer.currentTime = newTime;
+        });
+        
+        // Volume control
+        volumeSlider.addEventListener('input', (e) => {
+            const volume = e.target.value / 100;
+            audioPlayer.volume = volume;
+            const icon = muteBtn.querySelector('i');
+            if (volume === 0) {
+                icon.className = 'fas fa-volume-mute';
+            } else if (volume < 0.5) {
+                icon.className = 'fas fa-volume-down';
+            } else {
+                icon.className = 'fas fa-volume-up';
+            }
+        });
+        
+        // Mute toggle
+        muteBtn.addEventListener('click', () => {
+            if (audioPlayer.volume > 0) {
+                audioPlayer.volume = 0;
+                volumeSlider.value = 0;
+                muteBtn.querySelector('i').className = 'fas fa-volume-mute';
+            } else {
+                audioPlayer.volume = 0.7;
+                volumeSlider.value = 70;
+                muteBtn.querySelector('i').className = 'fas fa-volume-up';
+            }
+        });
+        
+        // Speed control
+        speedBtn.addEventListener('click', () => {
+            speedIndex = (speedIndex + 1) % speeds.length;
+            currentSpeed = speeds[speedIndex];
+            audioPlayer.playbackRate = currentSpeed;
+            speedBtn.querySelector('.speed-text').textContent = `${currentSpeed}x`;
+        });
+        
+        // Progress bar click to seek
+        progressBar.addEventListener('click', (e) => {
+            const rect = progressBar.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const percentage = clickX / rect.width;
+            const newTime = percentage * audioPlayer.duration;
+            audioPlayer.currentTime = newTime;
+        });
+        
+        // Audio event listeners
+        audioPlayer.addEventListener('loadedmetadata', () => {
+            console.log('🎵 Silence cuts audio metadata loaded');
+            updateTimeDisplay();
+            statusSpan.textContent = 'Ready to play';
+            // Generate waveform if canvas is available
+            this.generateWaveform(waveformCanvas, audioPlayer);
+        });
+        
+        audioPlayer.addEventListener('timeupdate', () => {
+            updateProgress();
+            updateTimeDisplay();
+        });
+        
+        audioPlayer.addEventListener('ended', () => {
+            isPlaying = false;
+            updatePlayPauseButton();
+            statusSpan.textContent = 'Playback complete';
+        });
+        
+        audioPlayer.addEventListener('play', () => {
+            isPlaying = true;
+            updatePlayPauseButton();
+        });
+        
+        audioPlayer.addEventListener('pause', () => {
+            isPlaying = false;
+            updatePlayPauseButton();
+        });
+        
+        audioPlayer.addEventListener('error', (e) => {
+            console.error('🎵 Silence cuts audio player error:', e);
+            statusSpan.textContent = 'Error loading audio';
+        });
+        
+        // Initialize volume
+        audioPlayer.volume = 0.7;
+        volumeSlider.value = 70;
+        
+        console.log('🎵 Silence cuts audio player initialized successfully');
+    }
+    
+    // Generate simple waveform visualization
+    generateWaveform(canvas, audioElement) {
+        if (!canvas || !audioElement) {
+            console.log('⚠️ Canvas or audio element not available for waveform generation');
+            return;
+        }
+        
+        const ctx = canvas.getContext('2d');
+        const width = canvas.width = canvas.offsetWidth;
+        const height = canvas.height;
+        
+        // Clear canvas
+        ctx.clearRect(0, 0, width, height);
+        
+        // Create a simple waveform visualization
+        ctx.fillStyle = '#4a90e2';
+        ctx.strokeStyle = '#4a90e2';
+        ctx.lineWidth = 2;
+        
+        // Generate a simple waveform pattern
+        const centerY = height / 2;
+        const amplitude = height * 0.3;
+        const frequency = 0.02;
+        
+        ctx.beginPath();
+        for (let x = 0; x < width; x += 2) {
+            const y = centerY + Math.sin(x * frequency) * amplitude * Math.random();
+            if (x === 0) {
+                ctx.moveTo(x, y);
+            } else {
+                ctx.lineTo(x, y);
+            }
+        }
+        ctx.stroke();
+        
+        // Add a subtle gradient fill
+        const gradient = ctx.createLinearGradient(0, 0, 0, height);
+        gradient.addColorStop(0, 'rgba(74, 144, 226, 0.3)');
+        gradient.addColorStop(1, 'rgba(74, 144, 226, 0.1)');
+        
+        ctx.fillStyle = gradient;
+        ctx.fill();
+        
+        console.log('🎵 Waveform generated successfully');
+    }
+    
+    // Get backend base URL
+    getBackendBaseUrl() {
+        const port = localStorage.getItem('audioToolsBackendPort') || '3000';
+        return `http://localhost:${port}`;
+    }
      
     // Render new timeline without silence
     renderNewSilenceFreeTimeline(result) {
