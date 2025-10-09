@@ -2,19 +2,8 @@
 
 import { motion } from 'framer-motion';
 import { Download, Play, Shield, Star, Users, Zap } from 'lucide-react';
-import { useEffect, useState } from 'react';
 
 export default function Hero() {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  if (!mounted) {
-    return null;
-  }
-
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
       {/* Background Elements */}
