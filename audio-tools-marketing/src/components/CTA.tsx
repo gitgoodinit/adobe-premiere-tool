@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Download, ArrowRight, Zap, Star, Users } from 'lucide-react';
+import { ArrowRight, Download, Star, Users, Zap } from 'lucide-react';
 
 export default function CTA() {
   return (
@@ -156,7 +156,7 @@ export default function CTA() {
             </p>
             <button className="group relative inline-flex items-center px-12 py-4 bg-gradient-to-r from-yellow-400 to-orange-500 text-white font-bold text-lg rounded-lg transition-all duration-300 transform hover:scale-105 hover:shadow-2xl">
               <Download className="w-6 h-6 mr-3" />
-              Download Now - It's Free!
+              Download Now - It&apos;s Free!
               <ArrowRight className="w-6 h-6 ml-3 group-hover:translate-x-1 transition-transform duration-200" />
             </button>
           </motion.div>

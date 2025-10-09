@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Star, Quote } from 'lucide-react';
+import { Quote, Star } from 'lucide-react';
 
 const testimonials = [
   {
@@ -101,7 +101,7 @@ export default function Testimonials() {
 
               {/* Content */}
               <blockquote className="text-gray-700 dark:text-gray-300 text-center mb-6 leading-relaxed">
-                "{testimonial.content}"
+                &ldquo;{testimonial.content}&rdquo;
               </blockquote>
 
               {/* Author */}
