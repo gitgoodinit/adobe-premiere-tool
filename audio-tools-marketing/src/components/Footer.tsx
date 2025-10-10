@@ -1,15 +1,12 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { 
-  Github, 
-  Twitter, 
-  Linkedin, 
-  Mail, 
-  Download, 
-  FileText, 
-  HelpCircle,
-  ExternalLink
+import {
+    ExternalLink,
+    Github,
+    Linkedin,
+    Mail,
+    Twitter
 } from 'lucide-react';
 
 const footerLinks = {

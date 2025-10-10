@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Download, Upload, Zap, CheckCircle } from 'lucide-react';
+import { CheckCircle, Download, Upload, Zap } from 'lucide-react';
 
 const steps = [
   {
@@ -82,7 +82,6 @@ export default function HowItWorks() {
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 lg:gap-4">
             {steps.map((step, index) => {
               const Icon = step.icon;
-              const isEven = index % 2 === 0;
               
               return (
                 <motion.div
